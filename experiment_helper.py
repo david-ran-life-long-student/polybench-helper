@@ -84,7 +84,7 @@ class Study:
             for non_bool_combo in itertools.product(*non_bool_ranges):
 
                 # Construct the boolean bits string (e.g., '101' for True, False, True)
-                bool_bits = "".join(["1" if b else "0" for b in bool_combo])
+                bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
 
                 # Construct executable name
                 non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
@@ -160,7 +160,7 @@ class Study:
             for bool_combo in itertools.product(*bool_ranges):
                 for non_bool_combo in itertools.product(*non_bool_ranges):
 
-                    bool_bits = "".join(["1" if b else "0" for b in bool_combo])
+                    bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
                     non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
                     exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
                     exe_path = os.path.join(self.build_dir, exe_name)
