@@ -84,11 +84,14 @@ class Study:
             for non_bool_combo in itertools.product(*non_bool_ranges):
 
                 # Construct the boolean bits string (e.g., '101' for True, False, True)
-                bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                try:
+                    bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                except ValueError:
+                    bool_bits = 'nobool'
 
                 # Construct executable name
                 non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
-                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}.exe"
                 exe_path = os.path.join(self.build_dir, exe_name)
 
                 # If binary doesn't exist, queue it for compilation
@@ -160,9 +163,13 @@ class Study:
             for bool_combo in itertools.product(*bool_ranges):
                 for non_bool_combo in itertools.product(*non_bool_ranges):
 
-                    bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                    # Construct the boolean bits string (e.g., '101' for True, False, True)
+                    try:
+                        bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                    except ValueError:
+                        bool_bits = 'nobool'
                     non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
-                    exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                    exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}.exe"
                     exe_path = os.path.join(self.build_dir, exe_name)
 
                     for runtime_combo in itertools.product(*runtime_ranges):
