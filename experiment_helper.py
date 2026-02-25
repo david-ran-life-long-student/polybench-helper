@@ -1,100 +1,231 @@
+"""
+This file is created by Gemini under the direction of dran on 2/24/26
+"""
 import pandas as pd
+import itertools
+import subprocess
+import concurrent.futures
+import os
+import hashlib
 
 RUNS_PER_EXPERIMENT = 10
-
+HASH_LENGTH = 8
 
 class Mutable:
     """
-    This object defines a parameter of the experiments
-    for example:
-    Mutable([10,100,1000,10000], name=N, is_compiler_flag=False) is a runtime arg for the problem size
-    Mutable([-ftree-vectorize]) is a compile time flag
-    Mutable([-O0, -O2, -O3]) also works
-    value range should be a list of strings for feeding to the compiler or program
-    TODO : add functionality to support env vars such as opemmp num threads
+    This object defines a parameter of the experiments.
+    Example:
+    Mutable([10, 100, 1000], name="N", is_compiler_flag=False) # Runtime arg
+    Mutable([-ftree-vectorize]) # Boolean compiler flag
+    Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
     def __init__(self, value_range, name=None, is_compiler_flag=True):
-        if is_compiler_flag and name is None:
-            self.name = value_range[0]
-
         self.is_compiler_flag = is_compiler_flag
-        self.value_range = value_range
+
+        if is_compiler_flag and name is None:
+            self.name = str(value_range[0])
+        else:
+            self.name = name
+
+        if len(value_range) == 1 and is_compiler_flag:
+            self.value_range = [True, False]
+        else:
+            self.value_range = value_range
 
     def is_bool_flag(self):
-        return self.is_compiler_flag and len(self.value_range) == 1
+        # Updated logic: A boolean flag is one whose range consists of True/False toggles
+        if not self.is_compiler_flag or not self.value_range:
+            return False
+        return all(isinstance(x, bool) for x in self.value_range)
 
 
 class Study:
     """
-    This object model a group of experiments
-    Note that the order of the runtime arg mutables at init time are the order of the args
-    // TODO : add ability to use more complex build systems than one line compiler calls
+    This object models a group of experiments.
     """
     def __init__(self, build_dir, experimental_params, base_compiler_command, compiler="clang", result_parser_func=None):
         self.build_dir = build_dir
         self.compiler = compiler
-        self.base_compiler_flags = base_compiler_command  # files + default flags
-        self.result_parser_func = result_parser_func
+        self.base_compiler_flags = base_compiler_command
+        self.result_parser_func = result_parser_func or self.default_result_parser
 
-        # TODO : sort the input so the order in deterministic
-        self.compiler_bool_flags = [each for each in experimental_params if each.is_bool_flag()]
-        self.compiler_non_bool_flags = [each for each in experimental_params if each.is_compiler_flag and not each.is_bool_flag()]
-        self.runtime_mutables = [each for each in experimental_params if not each.is_compiler_flag]
+        # Sort input to guarantee deterministic order for execution and hashing
+        experimental_params = sorted(experimental_params, key=lambda x: x.name)
 
-        # we'll use this to name executables
-        self.compiler_bool_flags_fingerprint = self.get_compiler_bool_flag_fingerprint(self.compiler_non_bool_flags)
-        self.compiler_non_bool_flags_fingerprint = self.get_compiler_num_flag_fingerprint(self.compiler_non_bool_flags_fingerprint)
+        self.compiler_bool_flags = [p for p in experimental_params if p.is_bool_flag()]
+        self.compiler_non_bool_flags = [p for p in experimental_params if p.is_compiler_flag and not p.is_bool_flag()]
+        self.runtime_mutables = [p for p in experimental_params if not p.is_compiler_flag]
 
-        self.result_df = pd.DataFrame()
+        # Fixed typo: passing correct lists to their respective fingerprint functions
+        self.compiler_bool_flags_fingerprint = self.get_compiler_bool_flag_fingerprint(self.compiler_bool_flags)
+        self.compiler_non_bool_flags_fingerprint = self.get_compiler_num_flag_fingerprint(self.compiler_non_bool_flags)
+
+        self.result_df = self.make_empty_dataframe()
+
+        # Ensure build directory exists
+        os.makedirs(self.build_dir, exist_ok=True)
 
     def make_empty_dataframe(self):
-        """
-        get an empty dataframe with the right columns based of the list of experimental param names
-        :return:
-        """
+        """Returns an empty dataframe with columns mapped to the parameter names."""
+        cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_mutables]
+        cols += ["Run_Iteration", "Result"]
+        return pd.DataFrame(columns=cols)
 
     def ensure_all_builds_exist(self):
-        """
-        make sure all permutations of the flags are built
-        should check build dir for cached builds
-        an executable should have the following name structure:
-        <self.compiler_bool_flags_fingerprint>-<bool-flag-status-as-bits>-<non-bool-flag-fingerprint>-<value1>-<value2>...
-        :return:
-        """
+        """Compiles all permutations of compiler flags in parallel if the executable is not already cached."""
+        bool_ranges = [f.value_range for f in self.compiler_bool_flags]
+        non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
 
-        # make a list of all possible combinations in terms of build flag values
+        # Collect all the build commands we need to run
+        build_tasks = []
 
+        # Cartesian product of all compiler flag combinations
+        for bool_combo in itertools.product(*bool_ranges):
+            for non_bool_combo in itertools.product(*non_bool_ranges):
 
-        # get the executable name based on the permutations
+                # Construct the boolean bits string (e.g., '101' for True, False, True)
+                bool_bits = "".join(["1" if b else "0" for b in bool_combo])
 
-        # mutate the base command to build the executable if one doesn't exist in the build dir
+                # Construct executable name
+                non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
+                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                exe_path = os.path.join(self.build_dir, exe_name)
 
+                # If binary doesn't exist, queue it for compilation
+                if not os.path.exists(exe_path):
+                    cmd = [self.compiler] + self.base_compiler_flags.split()
+
+                    # Add active boolean flags
+                    for flag_obj, is_active in zip(self.compiler_bool_flags, bool_combo):
+                        if is_active:
+                            cmd.append(flag_obj.name)
+
+                    # Add non-boolean flags
+                    cmd.extend(non_bool_combo)
+
+                    # Add output flag
+                    cmd.extend(["-o", exe_path])
+
+                    build_tasks.append((cmd, exe_path))
+
+        # Helper function to run a single compilation
+        def compile_binary(task):
+            cmd, path = task
+            try:
+                # capture_output prevents interleaved terminal spam and lets us grab stderr on failure
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+                print(f"Successfully compiled: {path}")
+            except subprocess.CalledProcessError as e:
+                print(f"COMPILATION FAILED for {path}")
+                print(f"Command: {' '.join(cmd)}")
+                print(f"Error Output:\n{e.stderr}")
+
+        # Execute builds in parallel
+        if build_tasks:
+            print(f"Starting {len(build_tasks)} parallel builds...")
+            # ThreadPoolExecutor is perfect here since subprocess releases the GIL
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                executor.map(compile_binary, build_tasks)
+            print("Finished build phase.")
+        else:
+            print("All required binaries are already cached.")
 
     def run_experiments(self):
-        """
-        for each configuration (build + runtime) run RUNS_PER_EXPERIMENT times
-        record all data into the pandas dataframe
-        the data should be returned by the executable,
-        may need some parsing, user can supply a function for doing so, we also have a default
-        :return:
-        """
+        """Runs benchmarks for every compiled binary and runtime parameter combination."""
+        bool_ranges = [f.value_range for f in self.compiler_bool_flags]
+        non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
+        runtime_ranges = [f.value_range for f in self.runtime_mutables]
 
+        # Determine the save file name based on fingerprints
+        results_filename = f"results_{self.compiler_bool_flags_fingerprint}_{self.compiler_non_bool_flags_fingerprint}.csv"
+        results_filepath = os.path.join(self.build_dir, results_filename)
+
+        # Load existing DataFrame if it exists and build a lookup set to skip completed runs
+        completed_keys = set()
+        if os.path.exists(results_filepath):
+            existing_df = pd.read_csv(results_filepath)
+            print(f"Loaded {len(existing_df)} existing records from {results_filepath}")
+
+            # Create a tuple of stringified parameters to use as a unique hash key for completed runs
+            for _, row in existing_df.iterrows():
+                key_dict = {col: str(row[col]) for col in existing_df.columns if col != "Result"}
+                completed_keys.add(tuple(sorted(key_dict.items())))
+        else:
+            existing_df = pd.DataFrame()
+
+        results_list = []
+
+        # Iterate over all combinations
+        for bool_combo in itertools.product(*bool_ranges):
+            for non_bool_combo in itertools.product(*non_bool_ranges):
+
+                bool_bits = "".join(["1" if b else "0" for b in bool_combo])
+                non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
+                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                exe_path = os.path.join(self.build_dir, exe_name)
+
+                for runtime_combo in itertools.product(*runtime_ranges):
+                    # Base row dictionary to hold this configuration's parameters
+                    config_dict = {}
+                    for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
+                    for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
+                    for i, flag in enumerate(self.runtime_mutables): config_dict[flag.name] = runtime_combo[i]
+
+                    # Execute RUNS_PER_EXPERIMENT times
+                    for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
+
+                        # Check if this specific configuration and iteration is already completed
+                        lookup_dict = {k: str(v) for k, v in config_dict.items()}
+                        lookup_dict["Run_Iteration"] = str(run_iteration)
+                        lookup_key = tuple(sorted(lookup_dict.items()))
+
+                        if lookup_key in completed_keys:
+                            continue  # Skip execution, we already have this data
+
+                        cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
+
+                        try:
+                            # Capture standard output
+                            output = subprocess.check_output(cmd, text=True).strip()
+                            parsed_result = self.result_parser_func(output)
+                        except subprocess.CalledProcessError as e:
+                            print(f"Error running {' '.join(cmd)}: {e}")
+                            parsed_result = None
+
+                        # Record data
+                        row_data = config_dict.copy()
+                        row_data["Run_Iteration"] = run_iteration
+                        row_data["Result"] = parsed_result
+                        results_list.append(row_data)
+
+        # Convert the new results to a DataFrame efficiently
+        new_df = pd.DataFrame(results_list)
+
+        # Concat and save if there's any data
+        if not new_df.empty or not existing_df.empty:
+            if not new_df.empty:
+                self.result_df = pd.concat([existing_df, new_df], ignore_index=True)
+            else:
+                self.result_df = existing_df
+
+            self.result_df.to_csv(results_filepath, index=False)
+            print(f"Saved {len(self.result_df)} total records to {results_filepath}")
     @staticmethod
     def default_result_parser(input_str):
-        return float(input_str)
+        try:
+            return float(input_str)
+        except ValueError:
+            return None
 
     @staticmethod
     def get_compiler_bool_flag_fingerprint(experimental_params):
-        """
-        return a short hash of all the names of boolean compile tine params
-        :param experimental_params:
-        :return:
-        """
+        """Returns a short MD5 hash of the names of boolean compile time params."""
+        names = "".join([p.name for p in experimental_params])
+        return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nobool"
 
     @staticmethod
     def get_compiler_num_flag_fingerprint(experimental_params):
-        """
-        return a short hash of all the names of non-boolean compile tine params
-        :param experimental_params:
-        :return:
-        """
+        """Returns a short MD5 hash of the names of non-boolean compile time params."""
+        names = "".join([p.name for p in experimental_params])
+        return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
+
