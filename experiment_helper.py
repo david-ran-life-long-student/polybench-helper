@@ -131,7 +131,7 @@ class Study:
             print("All required binaries are already cached.")
 
     def run_experiments(self):
-        """Runs benchmarks for every compiled binary and runtime parameter combination."""
+        """Runs benchmarks in a round-robin fashion to mitigate time-dependent systemic biases, saving after each full sweep."""
         bool_ranges = [f.value_range for f in self.compiler_bool_flags]
         non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
         runtime_ranges = [f.value_range for f in self.runtime_mutables]
@@ -146,33 +146,30 @@ class Study:
             existing_df = pd.read_csv(results_filepath)
             print(f"Loaded {len(existing_df)} existing records from {results_filepath}")
 
-            # Create a tuple of stringified parameters to use as a unique hash key for completed runs
             for _, row in existing_df.iterrows():
                 key_dict = {col: str(row[col]) for col in existing_df.columns if col != "Result"}
                 completed_keys.add(tuple(sorted(key_dict.items())))
         else:
             existing_df = pd.DataFrame()
 
-        results_list = []
+        # Outermost loop: Complete one full sweep of all configurations before starting the next
+        for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
+            print(f"\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---")
+            results_list = []
 
-        # Iterate over all combinations
-        for bool_combo in itertools.product(*bool_ranges):
-            for non_bool_combo in itertools.product(*non_bool_ranges):
+            for bool_combo in itertools.product(*bool_ranges):
+                for non_bool_combo in itertools.product(*non_bool_ranges):
 
-                bool_bits = "".join(["1" if b else "0" for b in bool_combo])
-                non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
-                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
-                exe_path = os.path.join(self.build_dir, exe_name)
+                    bool_bits = "".join(["1" if b else "0" for b in bool_combo])
+                    non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
+                    exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                    exe_path = os.path.join(self.build_dir, exe_name)
 
-                for runtime_combo in itertools.product(*runtime_ranges):
-                    # Base row dictionary to hold this configuration's parameters
-                    config_dict = {}
-                    for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
-                    for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
-                    for i, flag in enumerate(self.runtime_mutables): config_dict[flag.name] = runtime_combo[i]
-
-                    # Execute RUNS_PER_EXPERIMENT times
-                    for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
+                    for runtime_combo in itertools.product(*runtime_ranges):
+                        config_dict = {}
+                        for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
+                        for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
+                        for i, flag in enumerate(self.runtime_mutables): config_dict[flag.name] = runtime_combo[i]
 
                         # Check if this specific configuration and iteration is already completed
                         lookup_dict = {k: str(v) for k, v in config_dict.items()}
@@ -185,7 +182,6 @@ class Study:
                         cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
 
                         try:
-                            # Capture standard output
                             output = subprocess.check_output(cmd, text=True).strip()
                             parsed_result = self.result_parser_func(output)
                         except subprocess.CalledProcessError as e:
@@ -198,18 +194,22 @@ class Study:
                         row_data["Result"] = parsed_result
                         results_list.append(row_data)
 
-        # Convert the new results to a DataFrame efficiently
-        new_df = pd.DataFrame(results_list)
-
-        # Concat and save if there's any data
-        if not new_df.empty or not existing_df.empty:
+            # Checkpoint: Save data at the end of every sweep
+            new_df = pd.DataFrame(results_list)
             if not new_df.empty:
-                self.result_df = pd.concat([existing_df, new_df], ignore_index=True)
-            else:
+                existing_df = pd.concat([existing_df, new_df], ignore_index=True) if not existing_df.empty else new_df
+                existing_df.to_csv(results_filepath, index=False)
+
+                # Update the class attribute to stay in sync
                 self.result_df = existing_df
 
-            self.result_df.to_csv(results_filepath, index=False)
-            print(f"Saved {len(self.result_df)} total records to {results_filepath}")
+                # Update completed keys so we don't duplicate if we restart mid-sweep
+                for _, row in new_df.iterrows():
+                    key_dict = {col: str(row[col]) for col in new_df.columns if col != "Result"}
+                    completed_keys.add(tuple(sorted(key_dict.items())))
+
+                print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records.")
+
     @staticmethod
     def default_result_parser(input_str):
         try:
