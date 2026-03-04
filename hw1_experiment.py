@@ -12,8 +12,9 @@ if __name__=="__main__":
     s = Study(
         build_dir,
         [
-            Mutable([f"-DN={i}" for i in range(100, 1000, 100)]),
-            Mutable(["-O0", "-O2", "-O3"]),
+            Mutable([f"-DN={i}" for i in [512, 513, 1000, 1024, 2000, 2048]]),
+            Mutable(["-O0", "-O1", "-O2", "-O3", "-Ofast"]),
+            Mutable(["-fno-vectorize"]),
         ], base_compile_command, compiler="clang"
     )
 

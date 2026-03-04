@@ -1,3 +1,4 @@
 polybench-c-4.2.1-beta
 .idea
 build
+*/__pycache__
