@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def part_1(df:pd.DataFrame):
+def part_1c(df:pd.DataFrame):
     """
     data sample head
     -fno-vectorize,-DN=512,-O0,Run_Iteration,Result
@@ -41,14 +41,33 @@ def part_1(df:pd.DataFrame):
 
     # 5. Export plot to an image and data to CSV
     plt.savefig('./build/gflops_scatter_plot.png')
-    plt.show() # Display the plot to the user
+    # plt.show() # Display the plot to the user
 
     #df_filtered.to_csv('./build/processed_o2_results.csv', index=False)
     print("Plot saved as PNG and data exported to CSV successfully.")
     # explot plot to csv
 
+def part_1a(df:pd.DataFrame):
+    # filter for only -O2 runs, possibly vectorized
+    df_filtered = df[(df['-O0'] == '-O2') & (df['-fno-vectorize'] == False)]
+
+    # convert n into a number from flag
+    df_filtered['N'] = df_filtered.apply(lambda row : int(row["-DN=512"].split("=")[1]), axis=1)
+
+    df_filtered['gflops_per_sec'] = df_filtered.apply(lambda row : (row['N'] ** 3 * 2 + row['N'] ** 2) / 1000000000 / row['Result'], axis=1)
+
+
+    # compute stats for each n
+    for each_n in df_filtered['N'].unique():
+        same_n = df_filtered[df_filtered['N'] == each_n]
+        print(
+            f"N={each_n} min={same_n['Result'].min()} max={same_n['Result'].max()} " +
+            f"avg={same_n['Result'].mean()} best_glops={same_n['gflops_per_sec'].max()}"
+        )
+
 if __name__=="__main__":
     # load data
     df = pd.read_csv("./build/results_6c5c1a4c_4a2aa5f2.csv")
 
-    part_1(df)
+    part_1a(df)
+    part_1c(df)
