@@ -4,8 +4,8 @@ from experiment_helper import *
 
 if __name__=="__main__":
     base_compile_command = " ".join(["-I polybench-c-4.2.1-beta/utilities ",
-                          "-I polybench-c-4.2.1-beta/linear-algebra/blas/gemm",
-                          "polybench-c-4.2.1-beta/utilities/polybench.c polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.c",
+                          "-I polybench-c-4.2.1-beta/linear-algebra/kernels/2mm",
+                          "polybench-c-4.2.1-beta/utilities/polybench.c polybench-c-4.2.1-beta/linear-algebra/kernels/2mm/2mm.c",
                           "-DPOLYBENCH_TIME"])
     build_dir = "build"
 

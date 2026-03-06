@@ -1,0 +1,139 @@
+# -O2 results
+N=512 min=0.015916 max=0.016995 avg=0.0162377 best_glops=16.882231716511686
+N=513 min=0.01796 max=0.019062 avg=0.0184659 best_glops=15.04869504454343
+N=1000 min=0.111806 max=0.115598 avg=0.113911 best_glops=17.897071713503745
+N=1024 min=0.119317 max=0.122871 avg=0.1214305 best_glops=18.00692461258664
+N=2000 min=1.587277 max=1.959553 avg=1.771782 best_glops=10.082676180654039
+N=2048 min=1.947645 max=2.316726 avg=2.1715328 best_glops=8.822995714311386\
+
+# many O results
+N=512 min=0.015554 max=0.210721 avg=0.05731973999999998 best_glops=17.275144657322873 highest_flops=
+-fno-vectorize         True
+-DN=512             -DN=512
+-O0                     -O2
+Run_Iteration             1
+Result             0.015554
+N                       512
+gflops_per_sec    17.275145
+Name: 2, dtype: object
+
+
+N=513 min=0.017846 max=0.195899 avg=0.05856037999999998 best_glops=15.144825899361201 highest_flops=
+-fno-vectorize         True
+-DN=512             -DN=513
+-O0                     -O2
+Run_Iteration             1
+Result             0.017846
+N                       513
+gflops_per_sec    15.144826
+Name: 7, dtype: object
+
+
+N=1000 min=0.111806 max=1.496373 avg=0.41857538999999994 best_glops=17.897071713503745 highest_flops=
+-fno-vectorize        False
+-DN=512            -DN=1000
+-O0                     -O2
+Run_Iteration             5
+Result             0.111806
+N                      1000
+gflops_per_sec    17.897072
+Name: 282, dtype: object
+
+
+N=1024 min=0.119317 max=1.629579 avg=0.45115505000000006 best_glops=18.00692461258664 highest_flops=
+-fno-vectorize        False
+-DN=512            -DN=1024
+-O0                     -O2
+Run_Iteration             1
+Result             0.119317
+N                      1024
+gflops_per_sec    18.006925
+Name: 47, dtype: object
+
+
+N=2000 min=1.229972 max=12.294461 avg=3.9854228499999995 best_glops=13.0116783146283 highest_flops=
+-fno-vectorize         True
+-DN=512            -DN=2000
+-O0                  -Ofast
+Run_Iteration             5
+Result             1.229972
+N                      2000
+gflops_per_sec    13.011678
+Name: 264, dtype: object
+
+
+N=2048 min=1.901492 max=13.279496 avg=4.5869162999999995 best_glops=9.037147402145262 highest_flops=
+-fno-vectorize        True
+-DN=512           -DN=2048
+-O0                 -Ofast
+Run_Iteration            4
+Result            1.901492
+N                     2048
+gflops_per_sec    9.037147
+Name: 209, dtype: object
+
+# 2mm results
+N=512 min=0.665444 max=1.039721 avg=0.75224882 best_glops=0.4037869452576024 highest_flops=
+-fno-vectorize       False
+-DN=512            -DN=512
+-O0                    -O0
+Run_Iteration            4
+Result            0.665444
+N                      512
+gflops_per_sec    0.403787
+Name: 210, dtype: object
+
+
+N=513 min=0.149367 max=0.644393 avg=0.33267702000000005 best_glops=1.8094663680732694 highest_flops=
+-fno-vectorize        True
+-DN=512            -DN=513
+-O0                 -Ofast
+Run_Iteration            1
+Result            0.149367
+N                      513
+gflops_per_sec    1.809466
+Name: 9, dtype: object
+
+
+N=1000 min=1.117385 max=4.616046 avg=2.46618088 best_glops=1.790788313786206 highest_flops=
+-fno-vectorize        True
+-DN=512           -DN=1000
+-O0                 -Ofast
+Run_Iteration            1
+Result            1.117385
+N                     1000
+gflops_per_sec    1.790788
+Name: 14, dtype: object
+
+
+N=1024 min=5.555792 max=8.691529 avg=7.353213510000001 best_glops=0.38671934154482385 highest_flops=
+-fno-vectorize       False
+-DN=512           -DN=1024
+-O0                    -O0
+Run_Iteration            8
+Result            5.555792
+N                     1024
+gflops_per_sec    0.386719
+Name: 465, dtype: object
+
+
+N=2000 min=12.23703 max=51.896896 avg=24.741752820000002 best_glops=1.3078336818656162 highest_flops=
+-fno-vectorize        True
+-DN=512           -DN=2000
+-O0                    -O3
+Run_Iteration            2
+Result            12.23703
+N                     2000
+gflops_per_sec    1.307834
+Name: 83, dtype: object
+
+
+N=2048 min=68.050065 max=90.967496 avg=82.46769502 best_glops=0.2525208974892235 highest_flops=
+-fno-vectorize        False
+-DN=512            -DN=2048
+-O0                     -O0
+Run_Iteration             9
+Result            68.050065
+N                      2048
+gflops_per_sec     0.252521
+Name: 535, dtype: object
