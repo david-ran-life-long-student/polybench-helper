@@ -12,6 +12,7 @@ import hashlib
 
 RUNS_PER_EXPERIMENT = 10
 HASH_LENGTH = 8
+DEBUG = True
 
 class Mutable:
     """
@@ -204,15 +205,19 @@ class Study:
 
                             # Setup the execution environment
                             run_env = os.environ.copy()
+                            custom_env = {}
                             if self.base_env_vars:
                                 run_env.update(self.base_env_vars)
+                                custom_env.update(self.base_env_vars)
                             for i, flag in enumerate(self.runtime_env_vars):
                                 run_env[flag.name] = str(env_var_combo[i])
+                                custom_env[flag.name] = str(env_var_combo[i])
 
                             cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
 
                             try:
-                                print(f"test started: {' '.join(cmd)}")
+                                if DEBUG:
+                                    print(f"test started: {' '.join(cmd)}\nenv:{custom_env}")
                                 # Pass the custom env dict to the subprocess
                                 output = subprocess.check_output(cmd, text=True, env=run_env).strip()
                                 parsed_result = self.result_parser_func(output)
@@ -356,4 +361,4 @@ def print_cpu_info():
     print(f"Number of Logical CPUs   : {num_logical_cpus}")
     print(f"List of Physical CPUs    : {', '.join(physical_cpus_list)}")
 
-    return f"{{{', '.join(physical_cpus_list)}}}"
+    return f"{{{', '.join(physical_cpus_list)}}}", num_cores
