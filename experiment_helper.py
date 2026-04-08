@@ -1,6 +1,8 @@
 """
 This file is created by Gemini under the direction of dran on 2/24/26
 """
+import time
+
 import pandas as pd
 import itertools
 import subprocess
@@ -19,15 +21,16 @@ class Mutable:
     Mutable([-ftree-vectorize]) # Boolean compiler flag
     Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
-    def __init__(self, value_range, name=None, is_compiler_flag=True):
-        self.is_compiler_flag = is_compiler_flag
+    def __init__(self, value_range, name=None, mode="compiler_flag"):
+        self.is_compiler_flag = mode == "compiler_flag"
+        self.is_env_var = mode == "env_var"
 
-        if is_compiler_flag and name is None:
+        if self.is_compiler_flag and name is None:
             self.name = str(value_range[0])
         else:
             self.name = name
 
-        if len(value_range) == 1 and is_compiler_flag:
+        if len(value_range) == 1 and self.is_compiler_flag:
             self.value_range = [True, False]
         else:
             self.value_range = value_range
@@ -43,10 +46,11 @@ class Study:
     """
     This object models a group of experiments.
     """
-    def __init__(self, build_dir, experimental_params, base_compiler_command, compiler="clang", result_parser_func=None):
+    def __init__(self, build_dir, experimental_params, base_compiler_command, base_env_vars, compiler="clang", result_parser_func=None):
         self.build_dir = build_dir
         self.compiler = compiler
         self.base_compiler_flags = base_compiler_command
+        self.base_env_vars = base_env_vars # this is a dict of string name to string value mapping
         self.result_parser_func = result_parser_func or self.default_result_parser
 
         # Sort input to guarantee deterministic order for execution and hashing
@@ -54,7 +58,10 @@ class Study:
 
         self.compiler_bool_flags = [p for p in experimental_params if p.is_bool_flag()]
         self.compiler_non_bool_flags = [p for p in experimental_params if p.is_compiler_flag and not p.is_bool_flag()]
-        self.runtime_mutables = [p for p in experimental_params if not p.is_compiler_flag]
+        self.runtime_env_vars = [p for p in experimental_params if p.is_env_var]
+
+        # Ensure runtime args don't accidentally capture env vars
+        self.runtime_args = [p for p in experimental_params if not p.is_compiler_flag and not p.is_env_var]
 
         # Fixed typo: passing correct lists to their respective fingerprint functions
         self.compiler_bool_flags_fingerprint = self.get_compiler_bool_flag_fingerprint(self.compiler_bool_flags)
@@ -67,7 +74,7 @@ class Study:
 
     def make_empty_dataframe(self):
         """Returns an empty dataframe with columns mapped to the parameter names."""
-        cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_mutables]
+        cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_args + self.runtime_env_vars]
         cols += ["Run_Iteration", "Result"]
         return pd.DataFrame(columns=cols)
 
@@ -137,7 +144,8 @@ class Study:
         """Runs benchmarks in a round-robin fashion to mitigate time-dependent systemic biases, saving after each full sweep."""
         bool_ranges = [f.value_range for f in self.compiler_bool_flags]
         non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
-        runtime_ranges = [f.value_range for f in self.runtime_mutables]
+        runtime_ranges = [f.value_range for f in self.runtime_args]
+        env_var_ranges = [f.value_range for f in self.runtime_env_vars]
 
         # Determine the save file name based on fingerprints
         results_filename = f"results_{self.compiler_bool_flags_fingerprint}_{self.compiler_non_bool_flags_fingerprint}.csv"
@@ -157,7 +165,8 @@ class Study:
 
         # Outermost loop: Complete one full sweep of all configurations before starting the next
         for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
-            print(f"\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---")
+            print(f"\n{time.ctime()}\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---\n")
+            sweep_start = time.time()
             results_list = []
 
             for bool_combo in itertools.product(*bool_ranges):
@@ -173,33 +182,44 @@ class Study:
                     exe_path = os.path.join(self.build_dir, exe_name)
 
                     for runtime_combo in itertools.product(*runtime_ranges):
-                        config_dict = {}
-                        for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
-                        for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
-                        for i, flag in enumerate(self.runtime_mutables): config_dict[flag.name] = runtime_combo[i]
+                        for env_var_combo in itertools.product(*env_var_ranges):
+                            config_dict = {}
+                            for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
+                            for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
+                            for i, flag in enumerate(self.runtime_args): config_dict[flag.name] = runtime_combo[i]
+                            for i, flag in enumerate(self.runtime_env_vars): config_dict[flag.name] = env_var_combo[i]
 
-                        # Check if this specific configuration and iteration is already completed
-                        lookup_dict = {k: str(v) for k, v in config_dict.items()}
-                        lookup_dict["Run_Iteration"] = str(run_iteration)
-                        lookup_key = tuple(sorted(lookup_dict.items()))
+                            # Check if this specific configuration and iteration is already completed
+                            lookup_dict = {k: str(v) for k, v in config_dict.items()}
+                            lookup_dict["Run_Iteration"] = str(run_iteration)
+                            lookup_key = tuple(sorted(lookup_dict.items()))
 
-                        if lookup_key in completed_keys:
-                            continue  # Skip execution, we already have this data
+                            if lookup_key in completed_keys:
+                                continue  # Skip execution, we already have this data
 
-                        cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
+                            # Setup the execution environment
+                            run_env = os.environ.copy()
+                            if self.base_env_vars:
+                                run_env.update(self.base_env_vars)
+                            for i, flag in enumerate(self.runtime_env_vars):
+                                run_env[flag.name] = str(env_var_combo[i])
 
-                        try:
-                            output = subprocess.check_output(cmd, text=True).strip()
-                            parsed_result = self.result_parser_func(output)
-                        except subprocess.CalledProcessError as e:
-                            print(f"Error running {' '.join(cmd)}: {e}")
-                            parsed_result = None
+                            cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
 
-                        # Record data
-                        row_data = config_dict.copy()
-                        row_data["Run_Iteration"] = run_iteration
-                        row_data["Result"] = parsed_result
-                        results_list.append(row_data)
+                            try:
+                                print(f"test started: {' '.join(cmd)}")
+                                # Pass the custom env dict to the subprocess
+                                output = subprocess.check_output(cmd, text=True, env=run_env).strip()
+                                parsed_result = self.result_parser_func(output)
+                            except subprocess.CalledProcessError as e:
+                                print(f"Error running {' '.join(cmd)}: {e}")
+                                parsed_result = None
+
+                            # Record data
+                            row_data = config_dict.copy()
+                            row_data["Run_Iteration"] = run_iteration
+                            row_data["Result"] = parsed_result
+                            results_list.append(row_data)
 
             # Checkpoint: Save data at the end of every sweep
             new_df = pd.DataFrame(results_list)
@@ -215,7 +235,7 @@ class Study:
                     key_dict = {col: str(row[col]) for col in new_df.columns if col != "Result"}
                     completed_keys.add(tuple(sorted(key_dict.items())))
 
-                print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records.")
+                print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records in {time.time() - sweep_start:.3f} seconds")
 
     @staticmethod
     def default_result_parser(input_str):
@@ -235,4 +255,3 @@ class Study:
         """Returns a short MD5 hash of the names of non-boolean compile time params."""
         names = "".join([p.name for p in experimental_params])
         return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
-
