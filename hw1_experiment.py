@@ -13,8 +13,8 @@ if __name__=="__main__":
         build_dir,
         [
             Mutable([f"-DN={i}" for i in [512, 513, 1000, 1024, 2000, 2048]]),
-            #Mutable(["-O0", "-O1", "-O2", "-O3", "-Ofast"]),
-            #Mutable(["-fno-vectorize"]),
+            Mutable(["-O0", "-O1", "-O2", "-O3", "-Ofast"]),
+            Mutable(["-fno-vectorize"]),
         ], base_compile_command, {}, compiler="clang"
     )
 
