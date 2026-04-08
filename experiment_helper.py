@@ -21,9 +21,13 @@ class Mutable:
     Mutable([-ftree-vectorize]) # Boolean compiler flag
     Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
+    allowed_modes = ["env_var", "compiler_flag", "runtime_arg"]
     def __init__(self, value_range, name=None, mode="compiler_flag"):
         self.is_compiler_flag = mode == "compiler_flag"
         self.is_env_var = mode == "env_var"
+
+        if mode not in self.allowed_modes:
+            raise ValueError(f"mode: {mode} not in the expected list: {self.allowed_modes} ")
 
         if self.is_compiler_flag and name is None:
             self.name = str(value_range[0])
@@ -129,6 +133,7 @@ class Study:
                 print(f"COMPILATION FAILED for {path}")
                 print(f"Command: {' '.join(cmd)}")
                 print(f"Error Output:\n{e.stderr}")
+                exit(1)
 
         # Execute builds in parallel
         if build_tasks:
@@ -267,7 +272,7 @@ def print_cpu_info():
     number of cores
     number of logical cpus
     the list of physical cpus (cpus that don't share a physical core together)
-    :return: str list of logical cores in gomp format
+    :return: str list of logical cores in llvm libomp format
     """
     cpuinfo_path = '/proc/cpuinfo'
 
@@ -351,4 +356,4 @@ def print_cpu_info():
     print(f"Number of Logical CPUs   : {num_logical_cpus}")
     print(f"List of Physical CPUs    : {', '.join(physical_cpus_list)}")
 
-    return ' '.join(physical_cpus_list)
+    return f"{{{', '.join(physical_cpus_list)}}}"
