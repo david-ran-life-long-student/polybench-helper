@@ -12,7 +12,7 @@ import hashlib
 
 RUNS_PER_EXPERIMENT = 10
 HASH_LENGTH = 8
-DEBUG = True
+DEBUG = False
 
 class Mutable:
     """
