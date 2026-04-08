@@ -255,3 +255,100 @@ class Study:
         """Returns a short MD5 hash of the names of non-boolean compile time params."""
         names = "".join([p.name for p in experimental_params])
         return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
+
+import os
+
+def print_cpu_info():
+    """
+    this function get the proc/cpuinfo, parses it and print out these parameters
+    processor make and model
+    processor clock frequency
+    numa information if there is more than one numa node
+    number of cores
+    number of logical cpus
+    the list of physical cpus (cpus that don't share a physical core together)
+    :return: str list of logical cores in gomp format
+    """
+    cpuinfo_path = '/proc/cpuinfo'
+
+    if not os.path.exists(cpuinfo_path):
+        print(f"Error: {cpuinfo_path} not found. This function requires a Linux environment.")
+        return []
+
+    processors = []
+    current_cpu = {}
+
+    # 1. Read and parse /proc/cpuinfo
+    with open(cpuinfo_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # An empty line indicates the end of a single processor's block
+            if not line:
+                if current_cpu:
+                    processors.append(current_cpu)
+                    current_cpu = {}
+                continue
+
+            if ':' in line:
+                key, value = line.split(':', 1)
+                current_cpu[key.strip()] = value.strip()
+
+    # Catch the last block if the file doesn't end with a newline
+    if current_cpu:
+        processors.append(current_cpu)
+
+    if not processors:
+        return []
+
+    # 2. Extract Make, Model, and Frequency
+    model_name = processors[0].get('model name', 'Unknown Model')
+    # Note: 'cpu MHz' represents current frequency.
+    clock_freq = processors[0].get('cpu MHz', 'Unknown')
+    if clock_freq != 'Unknown':
+        clock_freq += ' MHz'
+
+    # 3. Determine NUMA Information
+    # Standard Linux method to count NUMA nodes
+    numa_nodes = []
+    numa_path = '/sys/devices/system/node'
+    if os.path.exists(numa_path):
+        numa_nodes = [d for d in os.listdir(numa_path) if d.startswith('node')]
+
+    # 4. Calculate core topologies
+    physical_cores_seen = set()
+    physical_cpus_list = []
+    logical_cores = []
+
+    for p in processors:
+        proc_id = p.get('processor')
+        if proc_id is not None:
+            logical_cores.append(proc_id)
+
+        # Use defaults if running in a VM that obscures topology
+        phys_id = p.get('physical id', '0')
+        core_id = p.get('core id', proc_id)
+
+        # A physical core is defined by a unique combination of socket ID and core ID
+        core_tuple = (phys_id, core_id)
+
+        if core_tuple not in physical_cores_seen:
+            physical_cores_seen.add(core_tuple)
+            if proc_id is not None:
+                # Store one logical CPU per physical core
+                physical_cpus_list.append(proc_id)
+
+    num_cores = len(physical_cores_seen)
+    num_logical_cpus = len(processors)
+
+    # Print out the required parameters
+    print(f"Processor Make/Model     : {model_name}")
+    print(f"Processor Clock Frequency: {clock_freq}")
+
+    if len(numa_nodes) > 1:
+        print(f"NUMA Information         : {len(numa_nodes)} NUMA nodes detected")
+
+    print(f"Number of Cores          : {num_cores}")
+    print(f"Number of Logical CPUs   : {num_logical_cpus}")
+    print(f"List of Physical CPUs    : {', '.join(physical_cpus_list)}")
+
+    return ' '.join(physical_cpus_list)
