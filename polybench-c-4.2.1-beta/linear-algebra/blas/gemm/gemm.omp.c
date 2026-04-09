@@ -87,20 +87,20 @@ void kernel_gemm(int ni, int nj, int nk,
 //C is NIxNJ
 
 #pragma scop
-#pragma omp parallel for private(i, j)
-  for (i = 0; i < _PB_NI; i++)
-#pragma omp simd
-  	for (j = 0; j < _PB_NJ; j++)
-  		C[i][j] = 0;
-
 #pragma omp parallel for private(i, j, k)
-  for (i = 0; i < _PB_NI; i++)
-  	for (k = 0; k < _PB_NK; k++)
-#pragma omp simd
-  	  for (j = 0; j < _PB_NJ; j++) {
-	    C[i][j] += alpha * A[i][k] * B[k][j];
-      }
+	for (i = 0; i < _PB_NI; i++) {
+		#pragma omp simd
+		for (j = 0; j < _PB_NJ; j++)
+			C[i][j] *= beta;
 
+		for (k = 0; k < _PB_NK; k++) {
+			DATA_TYPE alpha_temp = alpha * A[i][k];  // is this even worth it?
+			#pragma omp simd
+			for (j = 0; j < _PB_NJ; j++) {
+				C[i][j] += alpha_temp * B[k][j];
+			}
+		}
+	}
 #pragma endscop
 
 }
