@@ -1,6 +1,8 @@
 """
 This file is created by Gemini under the direction of dran on 2/24/26
 """
+import time
+
 import pandas as pd
 import itertools
 import subprocess
@@ -10,6 +12,7 @@ import hashlib
 
 RUNS_PER_EXPERIMENT = 10
 HASH_LENGTH = 8
+DEBUG = False
 
 class Mutable:
     """
@@ -19,15 +22,20 @@ class Mutable:
     Mutable([-ftree-vectorize]) # Boolean compiler flag
     Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
-    def __init__(self, value_range, name=None, is_compiler_flag=True):
-        self.is_compiler_flag = is_compiler_flag
+    allowed_modes = ["env_var", "compiler_flag", "runtime_arg"]
+    def __init__(self, value_range, name=None, mode="compiler_flag"):
+        self.is_compiler_flag = mode == "compiler_flag"
+        self.is_env_var = mode == "env_var"
 
-        if is_compiler_flag and name is None:
+        if mode not in self.allowed_modes:
+            raise ValueError(f"mode: {mode} not in the expected list: {self.allowed_modes} ")
+
+        if self.is_compiler_flag and name is None:
             self.name = str(value_range[0])
         else:
             self.name = name
 
-        if len(value_range) == 1 and is_compiler_flag:
+        if len(value_range) == 1 and self.is_compiler_flag:
             self.value_range = [True, False]
         else:
             self.value_range = value_range
@@ -43,10 +51,11 @@ class Study:
     """
     This object models a group of experiments.
     """
-    def __init__(self, build_dir, experimental_params, base_compiler_command, compiler="clang", result_parser_func=None):
+    def __init__(self, build_dir, experimental_params, base_compiler_command, base_env_vars, compiler="clang", result_parser_func=None):
         self.build_dir = build_dir
         self.compiler = compiler
         self.base_compiler_flags = base_compiler_command
+        self.base_env_vars = base_env_vars # this is a dict of string name to string value mapping
         self.result_parser_func = result_parser_func or self.default_result_parser
 
         # Sort input to guarantee deterministic order for execution and hashing
@@ -54,7 +63,10 @@ class Study:
 
         self.compiler_bool_flags = [p for p in experimental_params if p.is_bool_flag()]
         self.compiler_non_bool_flags = [p for p in experimental_params if p.is_compiler_flag and not p.is_bool_flag()]
-        self.runtime_mutables = [p for p in experimental_params if not p.is_compiler_flag]
+        self.runtime_env_vars = [p for p in experimental_params if p.is_env_var]
+
+        # Ensure runtime args don't accidentally capture env vars
+        self.runtime_args = [p for p in experimental_params if not p.is_compiler_flag and not p.is_env_var]
 
         # Fixed typo: passing correct lists to their respective fingerprint functions
         self.compiler_bool_flags_fingerprint = self.get_compiler_bool_flag_fingerprint(self.compiler_bool_flags)
@@ -67,7 +79,7 @@ class Study:
 
     def make_empty_dataframe(self):
         """Returns an empty dataframe with columns mapped to the parameter names."""
-        cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_mutables]
+        cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_args + self.runtime_env_vars]
         cols += ["Run_Iteration", "Result"]
         return pd.DataFrame(columns=cols)
 
@@ -84,11 +96,14 @@ class Study:
             for non_bool_combo in itertools.product(*non_bool_ranges):
 
                 # Construct the boolean bits string (e.g., '101' for True, False, True)
-                bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                try:
+                    bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                except ValueError:
+                    bool_bits = 'nobool'
 
                 # Construct executable name
                 non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
-                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}.exe"
                 exe_path = os.path.join(self.build_dir, exe_name)
 
                 # If binary doesn't exist, queue it for compilation
@@ -119,6 +134,7 @@ class Study:
                 print(f"COMPILATION FAILED for {path}")
                 print(f"Command: {' '.join(cmd)}")
                 print(f"Error Output:\n{e.stderr}")
+                exit(1)
 
         # Execute builds in parallel
         if build_tasks:
@@ -134,7 +150,8 @@ class Study:
         """Runs benchmarks in a round-robin fashion to mitigate time-dependent systemic biases, saving after each full sweep."""
         bool_ranges = [f.value_range for f in self.compiler_bool_flags]
         non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
-        runtime_ranges = [f.value_range for f in self.runtime_mutables]
+        runtime_ranges = [f.value_range for f in self.runtime_args]
+        env_var_ranges = [f.value_range for f in self.runtime_env_vars]
 
         # Determine the save file name based on fingerprints
         results_filename = f"results_{self.compiler_bool_flags_fingerprint}_{self.compiler_non_bool_flags_fingerprint}.csv"
@@ -154,45 +171,65 @@ class Study:
 
         # Outermost loop: Complete one full sweep of all configurations before starting the next
         for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
-            print(f"\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---")
+            print(f"\n{time.ctime()}\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---\n")
+            sweep_start = time.time()
             results_list = []
 
             for bool_combo in itertools.product(*bool_ranges):
                 for non_bool_combo in itertools.product(*non_bool_ranges):
 
-                    bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                    # Construct the boolean bits string (e.g., '101' for True, False, True)
+                    try:
+                        bool_bits = int("".join(["1" if b else "0" for b in bool_combo]), 2)
+                    except ValueError:
+                        bool_bits = 'nobool'
                     non_bool_vals = "-".join([str(v).replace("-", "") for v in non_bool_combo])
-                    exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}"
+                    exe_name = f"{self.compiler_bool_flags_fingerprint}-{bool_bits}-{self.compiler_non_bool_flags_fingerprint}-{non_bool_vals}.exe"
                     exe_path = os.path.join(self.build_dir, exe_name)
 
                     for runtime_combo in itertools.product(*runtime_ranges):
-                        config_dict = {}
-                        for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
-                        for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
-                        for i, flag in enumerate(self.runtime_mutables): config_dict[flag.name] = runtime_combo[i]
+                        for env_var_combo in itertools.product(*env_var_ranges):
+                            config_dict = {}
+                            for i, flag in enumerate(self.compiler_bool_flags): config_dict[flag.name] = bool_combo[i]
+                            for i, flag in enumerate(self.compiler_non_bool_flags): config_dict[flag.name] = non_bool_combo[i]
+                            for i, flag in enumerate(self.runtime_args): config_dict[flag.name] = runtime_combo[i]
+                            for i, flag in enumerate(self.runtime_env_vars): config_dict[flag.name] = env_var_combo[i]
 
-                        # Check if this specific configuration and iteration is already completed
-                        lookup_dict = {k: str(v) for k, v in config_dict.items()}
-                        lookup_dict["Run_Iteration"] = str(run_iteration)
-                        lookup_key = tuple(sorted(lookup_dict.items()))
+                            # Check if this specific configuration and iteration is already completed
+                            lookup_dict = {k: str(v) for k, v in config_dict.items()}
+                            lookup_dict["Run_Iteration"] = str(run_iteration)
+                            lookup_key = tuple(sorted(lookup_dict.items()))
 
-                        if lookup_key in completed_keys:
-                            continue  # Skip execution, we already have this data
+                            if lookup_key in completed_keys:
+                                continue  # Skip execution, we already have this data
 
-                        cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
+                            # Setup the execution environment
+                            run_env = os.environ.copy()
+                            custom_env = {}
+                            if self.base_env_vars:
+                                run_env.update(self.base_env_vars)
+                                custom_env.update(self.base_env_vars)
+                            for i, flag in enumerate(self.runtime_env_vars):
+                                run_env[flag.name] = str(env_var_combo[i])
+                                custom_env[flag.name] = str(env_var_combo[i])
 
-                        try:
-                            output = subprocess.check_output(cmd, text=True).strip()
-                            parsed_result = self.result_parser_func(output)
-                        except subprocess.CalledProcessError as e:
-                            print(f"Error running {' '.join(cmd)}: {e}")
-                            parsed_result = None
+                            cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
 
-                        # Record data
-                        row_data = config_dict.copy()
-                        row_data["Run_Iteration"] = run_iteration
-                        row_data["Result"] = parsed_result
-                        results_list.append(row_data)
+                            try:
+                                if DEBUG:
+                                    print(f"test started: {' '.join(cmd)}\nenv:{custom_env}")
+                                # Pass the custom env dict to the subprocess
+                                output = subprocess.check_output(cmd, text=True, env=run_env).strip()
+                                parsed_result = self.result_parser_func(output)
+                            except subprocess.CalledProcessError as e:
+                                print(f"Error running {' '.join(cmd)}: {e}")
+                                parsed_result = None
+
+                            # Record data
+                            row_data = config_dict.copy()
+                            row_data["Run_Iteration"] = run_iteration
+                            row_data["Result"] = parsed_result
+                            results_list.append(row_data)
 
             # Checkpoint: Save data at the end of every sweep
             new_df = pd.DataFrame(results_list)
@@ -208,7 +245,7 @@ class Study:
                     key_dict = {col: str(row[col]) for col in new_df.columns if col != "Result"}
                     completed_keys.add(tuple(sorted(key_dict.items())))
 
-                print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records.")
+                print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records in {time.time() - sweep_start:.3f} seconds")
 
     @staticmethod
     def default_result_parser(input_str):
@@ -229,3 +266,117 @@ class Study:
         names = "".join([p.name for p in experimental_params])
         return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
 
+import os
+
+def print_cpu_info():
+    """
+    this function gets the proc/cpuinfo, parses it and prints out these parameters:
+    processor make and model
+    processor clock frequency
+    vectorization instructions supported (x86 specific)
+    numa information if there is more than one numa node
+    number of cores
+    number of logical cpus
+    the list of physical cpus (cpus that don't share a physical core together)
+    :return: str list of logical cores in llvm libomp format
+    """
+    cpuinfo_path = '/proc/cpuinfo'
+
+    if not os.path.exists(cpuinfo_path):
+        print(f"Error: {cpuinfo_path} not found. This function requires a Linux environment.")
+        return []
+
+    processors = []
+    current_cpu = {}
+
+    # 1. Read and parse /proc/cpuinfo
+    with open(cpuinfo_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            # An empty line indicates the end of a single processor's block
+            if not line:
+                if current_cpu:
+                    processors.append(current_cpu)
+                    current_cpu = {}
+                continue
+
+            if ':' in line:
+                key, value = line.split(':', 1)
+                current_cpu[key.strip()] = value.strip()
+
+    # Catch the last block if the file doesn't end with a newline
+    if current_cpu:
+        processors.append(current_cpu)
+
+    if not processors:
+        return []
+
+    # 2. Extract Make, Model, and Frequency
+    model_name = processors[0].get('model name', 'Unknown Model')
+    # Note: 'cpu MHz' represents current frequency.
+    clock_freq = processors[0].get('cpu MHz', 'Unknown')
+    if clock_freq != 'Unknown':
+        clock_freq += ' MHz'
+
+    # 3. Determine Vectorization Instructions (x86 only)
+    flags_string = processors[0].get('flags', '')
+    cpu_flags = set(flags_string.lower().split())
+
+    # Predefined set of common x86 vectorization and SIMD instruction sets
+    known_vector_flags = {
+        'mmx', 'sse', 'sse2', 'sse3', 'ssse3', 'sse4_1', 'sse4_2', 'sse4a',
+        'avx', 'avx2', 'avx512f', 'avx512cd', 'avx512er', 'avx512pf',
+        'avx512bw', 'avx512dq', 'avx512vl', 'avx512vnni', 'avx512bf16',
+        'avx_vnni', 'fma', 'fma4'
+    }
+
+    supported_vectorization = sorted(list(cpu_flags.intersection(known_vector_flags)))
+    vector_str = ', '.join(supported_vectorization) if supported_vectorization else "None detected"
+
+    # 4. Determine NUMA Information
+    numa_nodes = []
+    numa_path = '/sys/devices/system/node'
+    if os.path.exists(numa_path):
+        numa_nodes = [d for d in os.listdir(numa_path) if d.startswith('node')]
+
+    # 5. Calculate core topologies
+    physical_cores_seen = set()
+    physical_cpus_list = []
+    logical_cores = []
+
+    for p in processors:
+        proc_id = p.get('processor')
+        if proc_id is not None:
+            logical_cores.append(proc_id)
+
+        # Use defaults if running in a VM that obscures topology
+        phys_id = p.get('physical id', '0')
+        core_id = p.get('core id', proc_id)
+
+        # A physical core is defined by a unique combination of socket ID and core ID
+        core_tuple = (phys_id, core_id)
+
+        if core_tuple not in physical_cores_seen:
+            physical_cores_seen.add(core_tuple)
+            if proc_id is not None:
+                # Store one logical CPU per physical core
+                physical_cpus_list.append(proc_id)
+
+    num_cores = len(physical_cores_seen)
+    num_logical_cpus = len(processors)
+
+    # Print out the required parameters
+    print(f"============================================================")
+    print(f"Processor Make/Model     : {model_name}")
+    print(f"Processor Clock Frequency: {clock_freq}")
+
+    if len(numa_nodes) > 1:
+        print(f"NUMA Information         : {len(numa_nodes)} NUMA nodes detected")
+
+    print(f"Number of Cores          : {num_cores}")
+    print(f"Number of Logical CPUs   : {num_logical_cpus}")
+    print(f"List of Physical CPUs    : {', '.join(physical_cpus_list)}")
+    print(f"Vector Instructions      : {vector_str}")
+    print(f"============================================================")
+
+    return f"{{{', '.join(physical_cpus_list)}}}", num_cores
