@@ -270,9 +270,10 @@ import os
 
 def print_cpu_info():
     """
-    this function get the proc/cpuinfo, parses it and print out these parameters
+    this function gets the proc/cpuinfo, parses it and prints out these parameters:
     processor make and model
     processor clock frequency
+    vectorization instructions supported (x86 specific)
     numa information if there is more than one numa node
     number of cores
     number of logical cpus
@@ -317,14 +318,28 @@ def print_cpu_info():
     if clock_freq != 'Unknown':
         clock_freq += ' MHz'
 
-    # 3. Determine NUMA Information
-    # Standard Linux method to count NUMA nodes
+    # 3. Determine Vectorization Instructions (x86 only)
+    flags_string = processors[0].get('flags', '')
+    cpu_flags = set(flags_string.lower().split())
+
+    # Predefined set of common x86 vectorization and SIMD instruction sets
+    known_vector_flags = {
+        'mmx', 'sse', 'sse2', 'sse3', 'ssse3', 'sse4_1', 'sse4_2', 'sse4a',
+        'avx', 'avx2', 'avx512f', 'avx512cd', 'avx512er', 'avx512pf',
+        'avx512bw', 'avx512dq', 'avx512vl', 'avx512vnni', 'avx512bf16',
+        'avx_vnni', 'fma', 'fma4'
+    }
+
+    supported_vectorization = sorted(list(cpu_flags.intersection(known_vector_flags)))
+    vector_str = ', '.join(supported_vectorization) if supported_vectorization else "None detected"
+
+    # 4. Determine NUMA Information
     numa_nodes = []
     numa_path = '/sys/devices/system/node'
     if os.path.exists(numa_path):
         numa_nodes = [d for d in os.listdir(numa_path) if d.startswith('node')]
 
-    # 4. Calculate core topologies
+    # 5. Calculate core topologies
     physical_cores_seen = set()
     physical_cpus_list = []
     logical_cores = []
@@ -351,6 +366,7 @@ def print_cpu_info():
     num_logical_cpus = len(processors)
 
     # Print out the required parameters
+    print(f"============================================================")
     print(f"Processor Make/Model     : {model_name}")
     print(f"Processor Clock Frequency: {clock_freq}")
 
@@ -360,5 +376,7 @@ def print_cpu_info():
     print(f"Number of Cores          : {num_cores}")
     print(f"Number of Logical CPUs   : {num_logical_cpus}")
     print(f"List of Physical CPUs    : {', '.join(physical_cpus_list)}")
+    print(f"Vector Instructions      : {vector_str}")
+    print(f"============================================================")
 
     return f"{{{', '.join(physical_cpus_list)}}}", num_cores
