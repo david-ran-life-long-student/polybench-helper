@@ -13,7 +13,7 @@ def part_1c(df:pd.DataFrame):
     """
 
     # filter for only -O2 runs
-    df_filtered = df[df['-O0'] == '-O2']
+    df_filtered = df[df['-O0'] == '-O3']
 
     # convert n into a number from flag
     df_filtered['N'] = df_filtered.apply(lambda row : int(row["-DN=512"].split("=")[1]), axis=1)
@@ -49,7 +49,7 @@ def part_1c(df:pd.DataFrame):
 
 def part_1a(df:pd.DataFrame):
     # filter for only -O2 runs, possibly vectorized
-    df_filtered = df[(df['-O0'] == '-O2') & (df['-fno-vectorize'] == False)]
+    df_filtered = df[(df['-O0'] == '-O3') & (df['-fno-vectorize'] == False)]
 
     # convert n into a number from flag
     df_filtered['N'] = df_filtered.apply(lambda row : int(row["-DN=512"].split("=")[1]), axis=1)
@@ -67,7 +67,7 @@ def part_1a(df:pd.DataFrame):
 
 if __name__=="__main__":
     # load data
-    df = pd.read_csv("./build/results_6c5c1a4c_4a2aa5f2.csv")
+    df = pd.read_csv("./build/results_7812051b_4a2aa5f2.csv")
 
     part_1a(df)
     part_1c(df)

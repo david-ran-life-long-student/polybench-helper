@@ -9,6 +9,7 @@ if __name__=="__main__":
     base_compile_command = " ".join(["-I polybench-c-4.2.1-beta/utilities ",
                                      "-I polybench-c-4.2.1-beta/linear-algebra/blas/gemm",
                                      "polybench-c-4.2.1-beta/utilities/polybench.c polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.c",
+                                     "-DPOLYBENCH_USE_RESTRICT",
                                      "-DPOLYBENCH_TIME"])
     base_env_vars = {
         "OMP_PLACES": physical_cores_list,  # this is targeting llvm libomp

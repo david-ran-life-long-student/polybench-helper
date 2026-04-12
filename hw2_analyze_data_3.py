@@ -91,4 +91,4 @@ def check_vectorization_impact(csv_filepath, target_opt_level='-O3'):
 
 if __name__ == "__main__":
     # Point this to your generated CSV
-    impact_df = check_vectorization_impact("./data/gemm_omp_ikj.csv", target_opt_level='-O3')
+    impact_df = check_vectorization_impact("./build/results_7812051b_4a2aa5f2.csv", target_opt_level='-O3')
