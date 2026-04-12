@@ -317,8 +317,17 @@ def print_cpu_info():
 
     # 2. Extract Make, Model, and Frequency
     model_name = processors[0].get('model name', 'Unknown Model')
-    # Note: 'cpu MHz' represents current frequency.
-    clock_freq = processors[0].get('cpu MHz', 'Unknown')
+    # Iterate through all processors to find the peak frequency
+    clock_freq = 0.0
+    for p in processors:
+        freq_str = p.get('cpu MHz', '0')
+        try:
+            freq = float(freq_str)
+            if freq > clock_freq:
+                clock_freq = freq
+        except ValueError:
+            continue
+    clock_freq = str(clock_freq)
     if clock_freq != 'Unknown':
         clock_freq += ' MHz'
 

@@ -1,3 +1,13 @@
+============================================================
+Processor Make/Model     : AMD Ryzen 9 7950X 16-Core Processor
+Processor Clock Frequency: 5292.706 MHz
+Number of Cores          : 16
+Number of Logical CPUs   : 32
+List of Physical CPUs    : 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+Vector Instructions      : avx, avx2, avx512bw, avx512cd, avx512dq, avx512f, avx512vl, fma, mmx, sse, sse2, sse4_1, sse4_2, sse4a, ssse3
+============================================================
+
+
 # -O2 results
 N=512 min=0.015916 max=0.016995 avg=0.0162377 best_glops=16.882231716511686
 N=513 min=0.01796 max=0.019062 avg=0.0184659 best_glops=15.04869504454343
