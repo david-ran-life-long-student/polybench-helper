@@ -15,7 +15,7 @@ if __name__=="__main__":
         "OMP_SCHEDULE": "static",  # not sure why we need to say this, isn't static default?
     }
 
-    build_dir = "build/original"
+    build_dir = "build"
 
     s = Study(
         build_dir,

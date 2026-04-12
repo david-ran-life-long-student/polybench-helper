@@ -268,6 +268,10 @@ class Study:
 
 import os
 
+
+###############################################################################
+# Utils
+###############################################################################
 def print_cpu_info():
     """
     this function gets the proc/cpuinfo, parses it and prints out these parameters:
@@ -380,3 +384,26 @@ def print_cpu_info():
     print(f"============================================================")
 
     return f"{{{', '.join(physical_cpus_list)}}}", num_cores
+
+def compute_trimmed_mean(df, target_col='Result'):
+    """
+    Groups the dataframe by the specified columns, removes the single highest
+    and single lowest value in the target column for each group,
+    and calculates the average of the remaining values.
+    """
+    def _trimmed_mean(series):
+        # If a group somehow has 2 or fewer runs, dropping the max and min
+        # would leave no data. Safely fall back to a regular mean.
+        if len(series) <= 2:
+            return series.mean()
+
+        # Sort the series, slice off the first (min) and last (max) elements,
+        # and compute the mean of the rest.
+        return series.sort_values().iloc[1:-1].mean()
+
+    group_cols = list(set(df.columns) - {target_col, 'Run_Iteration'})
+
+    # Group by the configuration columns and apply the custom function
+    trimmed_df = df.groupby(group_cols)[target_col].agg(_trimmed_mean).reset_index()
+
+    return trimmed_df
