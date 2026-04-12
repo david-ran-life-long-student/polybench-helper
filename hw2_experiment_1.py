@@ -22,9 +22,9 @@ if __name__=="__main__":
         [
             Mutable([f"-DN={i}" for i in [512, 513, 1000, 1024, 2000, 2048]]),
             Mutable(["-O0", "-O2", "-O3"]),
-            # Mutable(["-fopenmp"]),
-            # Mutable(["-fno-vectorize"]),
-            # Mutable([str(i + 1) for i in range(cores)], name="OMP_NUM_THREADS", mode="env_var")
+            Mutable(["-fopenmp"]),
+            Mutable(["-fno-vectorize"]),
+            Mutable([str(i + 1) for i in range(cores)], name="OMP_NUM_THREADS", mode="env_var")
         ], base_compile_command, base_env_vars, compiler="clang"
     )
 
