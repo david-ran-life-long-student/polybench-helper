@@ -25,6 +25,60 @@ def compute_trimmed_mean(df, target_col='Result'):
 
     return trimmed_df
 
+def print_optimal_configurations(csv_filepath, target_opt_level='-O3'):
+    # 1. Load data
+    df = pd.read_csv(csv_filepath)
+
+    df = compute_trimmed_mean(df)
+
+    # 2. Extract and clean parameters
+    df['N'] = df['-DN=512'].apply(lambda x: int(str(x).split('=')[1]))
+    df['Threads'] = df['OMP_NUM_THREADS']
+
+    # Standardize the optimization column name
+    df.rename(columns={'-O0': 'Opt_Level'}, inplace=True)
+
+    # Filter by a specific optimization level to ensure a fair comparison
+    df = df[df['Opt_Level'] == target_opt_level]
+
+    if df.empty:
+        print(f"No data found for optimization level {target_opt_level}.")
+        return
+
+    optimal_rows = []
+
+    # 4. Print Table Header
+    print(f"\nOptimal Binary Configurations for {target_opt_level}:")
+    print(f"{'Size (N)':<10} | {'Min Time (s)':<15} | {'Binary Version':<18} | {'Threads':<8} | {'Vectorized?'}")
+    print("-" * 73)
+
+    # 5. Find the best configuration for each problem size N
+    for n_val in sorted(df['N'].unique()):
+
+        # Isolate all permutations tested for this specific matrix size
+        subset = df[df['N'] == n_val]
+
+        # Find the index of the absolute minimum execution time
+        best_idx = subset['Result'].idxmin()
+        best_row = subset.loc[best_idx]
+
+        optimal_rows.append(best_row)
+
+        # Format the output variables
+        exec_time = best_row['Result']
+        is_omp = "OpenMP" if best_row['-fopenmp'] else "Serial (No OMP)"
+
+        # If it's the serial version, threading doesn't matter (tool usually defaults to 1)
+        threads = int(best_row['Threads']) if best_row['-fopenmp'] else "N/A"
+
+        # Interpret the inverted flag (False = Vectorized)
+        is_vec = "Yes" if not best_row['-fno-vectorize'] else "No"
+
+        print(f"{n_val:<10} | {exec_time:<15.6f} | {is_omp:<18} | {str(threads):<8} | {is_vec}")
+
+    # Return the filtered dataframe in case you want to plot it later
+    return pd.DataFrame(optimal_rows)
+
 def check_vectorization_impact(csv_filepath, target_opt_level='-O3'):
     # 1. Load data
     df = pd.read_csv(csv_filepath)
@@ -91,4 +145,5 @@ def check_vectorization_impact(csv_filepath, target_opt_level='-O3'):
 
 if __name__ == "__main__":
     # Point this to your generated CSV
-    impact_df = check_vectorization_impact("./build/results_7812051b_4a2aa5f2.csv", target_opt_level='-O3')
+    impact_df = check_vectorization_impact("./data/gemm_omp_ikj.csv", target_opt_level='-O3')
+    print_optimal_configurations("./data/gemm_omp_ikj.csv", target_opt_level='-O2')

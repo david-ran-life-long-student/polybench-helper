@@ -17,7 +17,7 @@ def plot_3d_performance_surface(csv_filepath):
     # vectorization settings, filter down to a specific baseline to avoid mixing data.
     # For example, filtering for -O3 and vectorized = True:
     df = df[(df['-O0'] == '-O3') & (df['-fno-vectorize'] == False)]
-    df = df[df['N'] < 600]
+    # df = df[df['N'] < 600]
 
     # 3. Group by N and Threads to average out the multiple 'Run_Iteration's
     grouped_df = df.groupby(['N', 'Threads'])['Result'].mean().reset_index()

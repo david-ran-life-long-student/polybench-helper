@@ -178,5 +178,7 @@ def print_optimal_configurations(csv_filepath, target_opt_level='-O3'):
 
 if __name__ == "__main__":
     # Point this to your generated CSV
-    print_optimal_configurations("./data/gemm_omp_ikj.csv", target_opt_level='-O2')
-    plot_strict_speedup_scaling("./data/gemm_omp_ikj.csv", target_opt_level='-O0')
+    data = "./data/gemm_omp_ikj.csv"
+    opt_level = '-O3'
+    print_optimal_configurations("./data/gemm_omp_ikj.csv", target_opt_level=opt_level)
+    plot_strict_speedup_scaling("./data/gemm_omp_ikj.csv", target_opt_level=opt_level)
