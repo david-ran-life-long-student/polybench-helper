@@ -18,7 +18,7 @@ class Mutable:
     """
     This object defines a parameter of the experiments.
     Example:
-    Mutable([10, 100, 1000], name="N", is_compiler_flag=False) # Runtime arg
+    Mutable([10, 100, 1000], name="N", mode="runtime_arg") # Runtime arg
     Mutable([-ftree-vectorize]) # Boolean compiler flag
     Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
@@ -213,7 +213,13 @@ class Study:
                                 run_env[flag.name] = str(env_var_combo[i])
                                 custom_env[flag.name] = str(env_var_combo[i])
 
-                            cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
+                            cmd = [f"./{exe_path}"]
+                            for i, arg in enumerate(runtime_combo):
+                                flag_name = self.runtime_args[i].name
+                                if flag_name:
+                                    cmd.extend([f"--{flag_name}", str(arg)])
+                                else:
+                                    cmd.append(str(arg))
 
                             try:
                                 if DEBUG:
