@@ -18,7 +18,7 @@ class Mutable:
     """
     This object defines a parameter of the experiments.
     Example:
-    Mutable([10, 100, 1000], name="N", is_compiler_flag=False) # Runtime arg
+    Mutable([10, 100, 1000], name="N", mode="runtime_arg") # Runtime arg
     Mutable([-ftree-vectorize]) # Boolean compiler flag
     Mutable(["-O0", "-O2", "-O3"]) # Non-boolean compiler flag
     """
@@ -213,7 +213,13 @@ class Study:
                                 run_env[flag.name] = str(env_var_combo[i])
                                 custom_env[flag.name] = str(env_var_combo[i])
 
-                            cmd = [f"./{exe_path}"] + [str(arg) for arg in runtime_combo]
+                            cmd = [f"./{exe_path}"]
+                            for i, arg in enumerate(runtime_combo):
+                                flag_name = self.runtime_args[i].name
+                                if flag_name:
+                                    cmd.extend([f"--{flag_name}", str(arg)])
+                                else:
+                                    cmd.append(str(arg))
 
                             try:
                                 if DEBUG:
@@ -268,6 +274,10 @@ class Study:
 
 import os
 
+
+###############################################################################
+# Utils
+###############################################################################
 def print_cpu_info():
     """
     this function gets the proc/cpuinfo, parses it and prints out these parameters:
@@ -313,8 +323,17 @@ def print_cpu_info():
 
     # 2. Extract Make, Model, and Frequency
     model_name = processors[0].get('model name', 'Unknown Model')
-    # Note: 'cpu MHz' represents current frequency.
-    clock_freq = processors[0].get('cpu MHz', 'Unknown')
+    # Iterate through all processors to find the peak frequency
+    clock_freq = 0.0
+    for p in processors:
+        freq_str = p.get('cpu MHz', '0')
+        try:
+            freq = float(freq_str)
+            if freq > clock_freq:
+                clock_freq = freq
+        except ValueError:
+            continue
+    clock_freq = str(clock_freq)
     if clock_freq != 'Unknown':
         clock_freq += ' MHz'
 
@@ -380,3 +399,26 @@ def print_cpu_info():
     print(f"============================================================")
 
     return f"{{{', '.join(physical_cpus_list)}}}", num_cores
+
+def compute_trimmed_mean(df, target_col='Result'):
+    """
+    Groups the dataframe by the specified columns, removes the single highest
+    and single lowest value in the target column for each group,
+    and calculates the average of the remaining values.
+    """
+    def _trimmed_mean(series):
+        # If a group somehow has 2 or fewer runs, dropping the max and min
+        # would leave no data. Safely fall back to a regular mean.
+        if len(series) <= 2:
+            return series.mean()
+
+        # Sort the series, slice off the first (min) and last (max) elements,
+        # and compute the mean of the rest.
+        return series.sort_values().iloc[1:-1].mean()
+
+    group_cols = list(set(df.columns) - {target_col, 'Run_Iteration'})
+
+    # Group by the configuration columns and apply the custom function
+    trimmed_df = df.groupby(group_cols)[target_col].agg(_trimmed_mean).reset_index()
+
+    return trimmed_df
