@@ -272,7 +272,38 @@ class Study:
         names = "".join([p.name for p in experimental_params])
         return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
 
-import os
+
+class HWCounterMetric:
+    """
+    This is the abstraction of a counter metric
+    This is defined by a set of counter strings and a function on how to compute the metric
+
+    the set of counters is extracted automatically from the compute func kwargs
+    when this is called we just unpack the kwargs and pass them to the compute func
+        def compute_func_example(self, counter_1=0, counter_2=1):
+        return counter_1 / counter_2
+
+    """
+    def __init__(self, name, compute_func):
+        self.name = name
+        self.counter_set = set(compute_func.kwargs.keys())
+        self.compute_value = compute_func
+
+    def __call__(self, *args, **kwargs):
+        return self.compute_value(*args, **kwargs)
+
+
+
+class HWCounterStudy (Study):
+    """
+    This is a subclass of Study that will analyze the hardware counters collected by polybench instead of simple times
+    polybench will read a file naming all the PAPI events to track and output a list of counter values
+
+    the plan is to subclass the Study and do most of the analysis in a custom output parser
+    in addition to the args of Study, this should take a list of HWCounterMetric
+    """
+
+
 
 
 ###############################################################################
