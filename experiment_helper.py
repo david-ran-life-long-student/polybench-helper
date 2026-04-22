@@ -157,6 +157,8 @@ class Study:
         results_filename = f"results_{self.compiler_bool_flags_fingerprint}_{self.compiler_non_bool_flags_fingerprint}.csv"
         results_filepath = os.path.join(self.build_dir, results_filename)
 
+        config_cols = [p.name for p in self.compiler_bool_flags + self.compiler_non_bool_flags + self.runtime_args + self.runtime_env_vars] + ["Run_Iteration"]
+
         # Load existing DataFrame if it exists and build a lookup set to skip completed runs
         completed_keys = set()
         if os.path.exists(results_filepath):
@@ -164,7 +166,7 @@ class Study:
             print(f"Loaded {len(existing_df)} existing records from {results_filepath}")
 
             for _, row in existing_df.iterrows():
-                key_dict = {col: str(row[col]) for col in existing_df.columns if col != "Result"}
+                key_dict = {col: str(row[col]) for col in config_cols if col in existing_df.columns}
                 completed_keys.add(tuple(sorted(key_dict.items())))
         else:
             existing_df = pd.DataFrame()
@@ -234,7 +236,12 @@ class Study:
                             # Record data
                             row_data = config_dict.copy()
                             row_data["Run_Iteration"] = run_iteration
-                            row_data["Result"] = parsed_result
+                            
+                            if isinstance(parsed_result, dict):
+                                row_data.update(parsed_result)
+                            else:
+                                row_data["Result"] = parsed_result
+                                
                             results_list.append(row_data)
 
             # Checkpoint: Save data at the end of every sweep
@@ -248,7 +255,7 @@ class Study:
 
                 # Update completed keys so we don't duplicate if we restart mid-sweep
                 for _, row in new_df.iterrows():
-                    key_dict = {col: str(row[col]) for col in new_df.columns if col != "Result"}
+                    key_dict = {col: str(row[col]) for col in config_cols if col in new_df.columns}
                     completed_keys.add(tuple(sorted(key_dict.items())))
 
                 print(f"Sweep {run_iteration} complete. Checkpointed {len(new_df)} new records in {time.time() - sweep_start:.3f} seconds")
@@ -273,6 +280,8 @@ class Study:
         return hashlib.md5(names.encode()).hexdigest()[:HASH_LENGTH] if names else "nonum"
 
 
+import inspect
+
 class HWCounterMetric:
     """
     This is the abstraction of a counter metric
@@ -286,13 +295,19 @@ class HWCounterMetric:
     """
     def __init__(self, name, compute_func):
         self.name = name
-        self.counter_set = set(compute_func.kwargs.keys())
+        # Exclude 'self' if the metric function is defined as a method
+        self.counter_set = {
+            param for param in inspect.signature(compute_func).parameters 
+            if param != 'self'
+        }
         self.compute_value = compute_func
 
     def __call__(self, *args, **kwargs):
         return self.compute_value(*args, **kwargs)
 
 
+
+import json
 
 class HWCounterStudy (Study):
     """
@@ -302,6 +317,63 @@ class HWCounterStudy (Study):
     the plan is to subclass the Study and do most of the analysis in a custom output parser
     in addition to the args of Study, this should take a list of HWCounterMetric
     """
+    def __init__(self, build_dir, experimental_params, base_compiler_command, base_env_vars, hw_metrics, compiler="clang"):
+        self.hw_metrics = hw_metrics
+        
+        # Extract unique counters required across all metrics
+        self.counters = set()
+        for metric in hw_metrics:
+            self.counters.update(metric.counter_set)
+        self.counter_list = sorted(list(self.counters))
+        
+        # Ensure build directory exists
+        os.makedirs(build_dir, exist_ok=True)
+        
+        # Write papi_counters.list for Polybench to pick up during compilation
+        papi_list_path = os.path.join(build_dir, "papi_counters.list")
+        with open(papi_list_path, "w") as f:
+            for counter in self.counter_list:
+                f.write(f'"{counter}",\n')
+                
+        # Modify the compiler command to prioritize our papi_counters.list and link PAPI
+        # We prepend -I {build_dir} so that it is found before the utilities folder
+        modified_compiler_command = f"-I {build_dir} -DPOLYBENCH_PAPI {base_compiler_command} -lpapi"
+        
+        super().__init__(
+            build_dir, 
+            experimental_params, 
+            modified_compiler_command, 
+            base_env_vars, 
+            compiler=compiler, 
+            result_parser_func=self.parse_hw_counters
+        )
+
+    def parse_hw_counters(self, output):
+        parts = output.strip().split()
+        if not parts:
+            return None
+            
+        try:
+            values = [int(p) for p in parts]
+        except ValueError:
+            return None
+            
+        if len(values) != len(self.counter_list):
+            return None
+            
+        # Map counter names to their values
+        counter_values = dict(zip(self.counter_list, values))
+        
+        # Compute metrics based on HWCounterMetric functions
+        results = {}
+        for metric in self.hw_metrics:
+            kwargs = {k: counter_values[k] for k in metric.counter_set}
+            try:
+                results[metric.name] = metric(**kwargs)
+            except Exception:
+                results[metric.name] = None
+                
+        return results
 
 
 
