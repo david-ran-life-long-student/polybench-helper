@@ -29,15 +29,11 @@ def main():
         HWCounterMetric("L1_Miss_Rate", l1_miss_rate),
         HWCounterMetric("Double_Inst", double_inst)
     ]
-    
-    # Clean up any existing results to ensure a fresh test run
-    if os.path.exists("build_hw"):
-        shutil.rmtree("build_hw")
-    
+
     # Base command compiles our C file
     base_cmd = "test_hw_counters.c"
     
-    study = HWCounterStudy("build_hw", params, base_cmd, base_env_vars={}, hw_metrics=metrics, compiler="gcc")
+    study = HWCounterStudy("build", params, base_cmd, base_env_vars={}, hw_metrics=metrics, compiler="gcc")
     
     print("--- Ensuring builds exist ---")
     study.ensure_all_builds_exist()
