@@ -19,6 +19,9 @@ Polybench-Helper streamlines the process of running extensive compiler and runti
 - **Deterministic Builds & Caching (`Study`):**
   - All configurations are compiled in parallel.
   - Binaries are named using MD5 fingerprints of the compiler flags to cache and reuse builds across runs.
+- **Hardware Counter Studies (`HWCounterStudy`):**
+  - Subclass of `Study` that integrates with PAPI to collect hardware performance counters.
+  - Define custom derived metrics using `HWCounterMetric`.
 - **Robust Execution:**
   - Runs experiments in a round-robin "sweep" fashion to mitigate time-dependent systemic biases.
   - Automatically checkpoints data to CSV files after each full sweep. If interrupted, the suite can resume where it left off.
@@ -30,7 +33,7 @@ Polybench-Helper streamlines the process of running extensive compiler and runti
 
 ## Usage
 
-The project centers around defining a `Study` in an experiment script.
+The project centers around defining a `Study` (or `HWCounterStudy`) in an experiment script.
 
 ### 1. Define the Base Environment
 Set up your base compiler command (including your target C files and include directories).
@@ -67,14 +70,44 @@ study.ensure_all_builds_exist()
 study.run_experiments()
 ```
 
-### 4. Analyze Results
+### 4. Hardware Counter Studies (Optional)
+If you want to measure hardware performance counters using PAPI, use `HWCounterStudy` and define metrics using `HWCounterMetric`. PAPI counters are exposed as parameters to your metric functions.
+
+```python
+from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
+
+def ipc(PAPI_TOT_INS, PAPI_TOT_CYC):
+    return PAPI_TOT_INS / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
+
+def l1_miss_rate(PAPI_L1_DCM, PAPI_LST_INS):
+    return (PAPI_L1_DCM / PAPI_LST_INS) * 100 if PAPI_LST_INS > 0 else 0
+
+study = HWCounterStudy(
+    build_dir="build",
+    experimental_params=[
+        Mutable(["-O0", "-O3"]),
+    ],
+    base_compiler_command=base_compile_command,
+    base_env_vars={},
+    hw_metrics=[
+        HWCounterMetric("IPC", ipc),
+        HWCounterMetric("%L1m", l1_miss_rate),
+    ],
+    compiler="gcc"
+)
+
+study.ensure_all_builds_exist()
+study.run_experiments()
+```
+
+### 5. Analyze Results
 Use the functions provided in `analysis_helper.py` to parse the resulting CSV files and generate insights or plots. Examples of usage can be found in the provided `hw*_analyze_data_*.py` files.
 
 ## Project Structure
 
-- `experiment_helper.py`: Core logic for `Mutable` and `Study` classes, handling compilation and execution.
+- `experiment_helper.py`: Core logic for `Mutable`, `Study` and `HWCounterStudy` classes, handling compilation and execution.
 - `analysis_helper.py`: Functions for data manipulation, outlier removal, and plotting via Pandas and Matplotlib.
-- `hw*_experiment.py`: Example scripts demonstrating how to define and run a study.
+- `hw*_experiment*.py`: Example scripts demonstrating how to define and run a study.
 - `hw*_analyze_data_*.py`: Example scripts demonstrating how to load results and run analyses.
 - `data/`: Directory containing generated plots and output CSVs.
 
@@ -84,6 +117,7 @@ Use the functions provided in `analysis_helper.py` to parse the resulting CSV fi
 - Numpy
 - Matplotlib
 - A C compiler (e.g., Clang or GCC)
+- PAPI (Performance Application Programming Interface) for hardware counter studies
 
 ## Note
 The `hw*` scripts are intended as specific use-case examples of the framework and aren't meant to be reused directly, but they serve as an excellent starting point for learning how to use the `Study` API and `analysis_helper` tools.
