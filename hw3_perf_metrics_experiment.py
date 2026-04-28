@@ -5,13 +5,27 @@ import shutil
 import experiment_helper
 from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
 
-# Define a couple of fake metrics
-# def l1_miss_rate(PAPI_L1_DCM, PAPI_TOT_CYC):
-#     # Just a fake calculation
-#     return PAPI_L1_DCM / PAPI_TOT_CYC
+def ipc(PAPI_TOT_INS, PAPI_TOT_CYC):
+    return PAPI_TOT_INS / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
 
-def vec_to_total_instr_ratio(PAPI_VEC_INS, PAPI_TOT_INS):
-    return PAPI_VEC_INS / PAPI_TOT_INS
+def vipc(PAPI_VEC_SP, PAPI_VEC_DP, PAPI_TOT_CYC):
+    return (PAPI_VEC_SP + PAPI_VEC_DP) / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
+
+def l1_miss_rate(PAPI_L1_DCM, PAPI_LST_INS):
+    return (PAPI_L1_DCM / PAPI_LST_INS) * 100 if PAPI_LST_INS > 0 else 0
+
+def l2_miss_rate(PAPI_L2_DCM, PAPI_L2_DCA):
+    return (PAPI_L2_DCM / PAPI_L2_DCA) * 100 if PAPI_L2_DCA > 0 else 0
+
+def l1_accesses_per_instruction(PAPI_LST_INS, PAPI_TOT_INS):
+    return PAPI_LST_INS / PAPI_TOT_INS if PAPI_TOT_INS > 0 else 0
+
+def l1_accesses_per_vector_instruction(PAPI_LST_INS, PAPI_VEC_SP, PAPI_VEC_DP):
+    vec_ins = PAPI_VEC_SP + PAPI_VEC_DP
+    return PAPI_LST_INS / vec_ins if vec_ins > 0 else 0
+
+def stall_rate(PAPI_RES_STL, PAPI_TOT_CYC):
+    return (PAPI_RES_STL / PAPI_TOT_CYC) * 100 if PAPI_TOT_CYC > 0 else 0
 
 def main():
     # Run only 1 iteration for the test
@@ -28,7 +42,13 @@ def main():
         Mutable(["-O0", "-O2", "-O3"]),
         Mutable(["-fopenmp"]),
     ], base_compile_command, base_env_vars={}, hw_metrics=[
-        HWCounterMetric("Vector Instruction Ratio", vec_to_total_instr_ratio),
+        HWCounterMetric("IPC", ipc),
+        HWCounterMetric("vIPC", vipc),
+        HWCounterMetric("%L1m", l1_miss_rate),
+        HWCounterMetric("%L2m", l2_miss_rate),
+        HWCounterMetric("L1AC", l1_accesses_per_instruction),
+        HWCounterMetric("vL1AC", l1_accesses_per_vector_instruction),
+        HWCounterMetric("%Stall", stall_rate),
     ], compiler="gcc")
 
     study.ensure_all_builds_exist()
