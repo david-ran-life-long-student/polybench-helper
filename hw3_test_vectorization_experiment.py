@@ -28,7 +28,7 @@ def main():
         Mutable(["-O0", "-O2", "-O3"]),
         Mutable(["-fopenmp"]),
     ], base_compile_command, base_env_vars={}, hw_metrics=[
-        vec_to_total_instr_ratio
+        HWCounterMetric("Vector Instruction Ratio", vec_to_total_instr_ratio),
     ], compiler="gcc")
 
     study.ensure_all_builds_exist()
