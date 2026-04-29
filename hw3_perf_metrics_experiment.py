@@ -8,8 +8,8 @@ from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
 def ipc(PAPI_TOT_INS, PAPI_TOT_CYC):
     return PAPI_TOT_INS / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
 
-def vipc(PAPI_VEC_SP, PAPI_VEC_DP, PAPI_TOT_CYC):
-    return (PAPI_VEC_SP + PAPI_VEC_DP) / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
+def vipc(PAPI_VEC_DP, PAPI_TOT_CYC):
+    return (PAPI_VEC_DP) / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
 
 def l1_miss_rate(PAPI_L1_DCM, PAPI_LST_INS):
     return (PAPI_L1_DCM / PAPI_LST_INS) * 100 if PAPI_LST_INS > 0 else 0
@@ -20,9 +20,8 @@ def l2_miss_rate(PAPI_L2_DCM, PAPI_L2_DCA):
 def l1_accesses_per_instruction(PAPI_LST_INS, PAPI_TOT_INS):
     return PAPI_LST_INS / PAPI_TOT_INS if PAPI_TOT_INS > 0 else 0
 
-def l1_accesses_per_vector_instruction(PAPI_LST_INS, PAPI_VEC_SP, PAPI_VEC_DP):
-    vec_ins = PAPI_VEC_SP + PAPI_VEC_DP
-    return PAPI_LST_INS / vec_ins if vec_ins > 0 else 0
+def l1_accesses_per_vector_instruction(PAPI_LST_INS, PAPI_VEC_DP):
+    return PAPI_LST_INS / PAPI_VEC_DP if PAPI_VEC_DP > 0 else 0
 
 def stall_rate(PAPI_RES_STL, PAPI_TOT_CYC):
     return (PAPI_RES_STL / PAPI_TOT_CYC) * 100 if PAPI_TOT_CYC > 0 else 0

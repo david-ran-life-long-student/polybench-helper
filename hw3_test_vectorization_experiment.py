@@ -10,8 +10,8 @@ from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
 #     # Just a fake calculation
 #     return PAPI_L1_DCM / PAPI_TOT_CYC
 
-def vec_to_total_instr_ratio(PAPI_VEC_INS, PAPI_TOT_INS):
-    return PAPI_VEC_INS / PAPI_TOT_INS
+def vec_to_total_instr_ratio(PAPI_VEC_DP, PAPI_TOT_INS):
+    return PAPI_VEC_DP / PAPI_TOT_INS
 
 def main():
     # Run only 1 iteration for the test
