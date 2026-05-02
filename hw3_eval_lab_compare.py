@@ -32,16 +32,16 @@ def main():
                                      "-I polybench-c-4.2.1-beta/linear-algebra/blas/gemm",
                                      "-I $HOME/papi-install/include",
                                      "-L $HOME/papi-install/lib",
+                                     "-DPOLYBENCH_USE_RESTRICT",
                                      "polybench-c-4.2.1-beta/utilities/polybench.c",
                                      # "polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.c",
-                                     "-DPOLYBENCH_USE_RESTRICT",
                                      ])
 
     # we run the study twice to compare
     study = HWCounterStudy("eval_lab", [
         Mutable([f"-DN={i}" for i in [64, 128, 256, 512, 1024]], name="N"),
         Mutable(["-O3"]),
-    ], base_compile_command + ["polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.eval-lab.c"], base_env_vars={}, hw_metrics=[
+    ], base_compile_command + " polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.eval-lab.c", base_env_vars={}, hw_metrics=[
         HWCounterMetric("IPC", ipc),
         HWCounterMetric("vIPC", vipc),
         HWCounterMetric("%L1m", l1_miss_rate),
@@ -57,7 +57,7 @@ def main():
     study = HWCounterStudy("this_lab", [
         Mutable([f"-DN={i}" for i in [64, 128, 256, 512, 1024]], name="N"),
         Mutable(["-O3"]),
-    ], base_compile_command + ["polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.c"], base_env_vars={}, hw_metrics=[
+    ], base_compile_command + " polybench-c-4.2.1-beta/linear-algebra/blas/gemm/gemm.c", base_env_vars={}, hw_metrics=[
         HWCounterMetric("IPC", ipc),
         HWCounterMetric("vIPC", vipc),
         HWCounterMetric("%L1m", l1_miss_rate),
