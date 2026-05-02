@@ -146,7 +146,7 @@ class Study:
         else:
             print("All required binaries are already cached.")
 
-    def run_experiments(self):
+    def run_experiments(self, runs=RUNS_PER_EXPERIMENT):
         """Runs benchmarks in a round-robin fashion to mitigate time-dependent systemic biases, saving after each full sweep."""
         bool_ranges = [f.value_range for f in self.compiler_bool_flags]
         non_bool_ranges = [f.value_range for f in self.compiler_non_bool_flags]
@@ -172,8 +172,8 @@ class Study:
             existing_df = pd.DataFrame()
 
         # Outermost loop: Complete one full sweep of all configurations before starting the next
-        for run_iteration in range(1, RUNS_PER_EXPERIMENT + 1):
-            print(f"\n{time.ctime()}\n--- Starting Sweep {run_iteration} of {RUNS_PER_EXPERIMENT} ---\n")
+        for run_iteration in range(1, runs + 1):
+            print(f"\n{time.ctime()}\n--- Starting Sweep {run_iteration} of {runs} ---\n")
             sweep_start = time.time()
             results_list = []
 
