@@ -29,7 +29,7 @@ def stall_rate(PAPI_RES_STL, PAPI_TOT_CYC):
 def main():
 
     base_compile_command = " ".join(["-I polybench-c-4.2.1-beta/utilities ",
-                                     "-I polybench-c-4.2.1-beta/linear-algebra/kernels/2mm",
+                                     "-I polybench-c-4.2.1-beta/linear-algebra/blas/gemm",
                                      "-I $HOME/papi-install/include",
                                      "-L $HOME/papi-install/lib",
                                      "polybench-c-4.2.1-beta/utilities/polybench.c",
