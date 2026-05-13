@@ -22,6 +22,17 @@
 
 #include <polybench.h>
 
+/* Allow runners to set both M and N from a single -DSIZE=... flag.
+   correlation.h skips its preset table if M and N are already defined. */
+#ifdef SIZE
+#  ifndef M
+#    define M SIZE
+#  endif
+#  ifndef N
+#    define N SIZE
+#  endif
+#endif
+
 #include "correlation.h"
 
 #ifndef TIME_REGION

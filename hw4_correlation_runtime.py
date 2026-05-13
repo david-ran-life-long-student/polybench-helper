@@ -23,7 +23,7 @@ def main():
 
     # Square sizes (M == N) keep the sweep tractable; we can split if needed.
     sizes = [128, 256, 512, 1024, 2048]
-    size_flags = [f"-DM={s} -DN={s}" for s in sizes]
+    size_flags = [f"-DSIZE={s}" for s in sizes]
     region_flags = [f"-DTIME_REGION={r}" for r in range(0, 5)]
 
     study = Study(

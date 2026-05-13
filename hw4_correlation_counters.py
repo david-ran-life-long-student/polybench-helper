@@ -68,7 +68,7 @@ def main():
     ])
 
     sizes = [128, 256, 512, 1024, 2048]
-    size_flags = [f"-DM={s} -DN={s}" for s in sizes]
+    size_flags = [f"-DSIZE={s}" for s in sizes]
     # Skip TIME_REGION=0 here; that's just the sum of 1..4 and runtime
     # study already covers it.
     region_flags = [f"-DTIME_REGION={r}" for r in range(1, 5)]
