@@ -27,7 +27,7 @@ def main():
         "-lm",
     ])
 
-    sizes = [128, 256, 512, 1024, 2048]
+    sizes = [128, 512, 2048]
     size_flags = [f"-DSIZE={s}" for s in sizes]
     region_flags = [f"-DTIME_REGION={r}" for r in [0, 4, 5, 6]]
 

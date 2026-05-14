@@ -67,7 +67,7 @@ def main():
         "-lm",
     ])
 
-    sizes = [128, 256, 512, 1024, 2048]
+    sizes = [128, 512, 2048]
     size_flags = [f"-DSIZE={s}" for s in sizes]
     # Skip TIME_REGION=0 here; that's just the sum of 1..4 and runtime
     # study already covers it.

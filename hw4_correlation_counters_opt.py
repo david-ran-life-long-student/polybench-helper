@@ -60,7 +60,7 @@ def main():
         "-lm",
     ])
 
-    sizes = [128, 256, 512, 1024, 2048]
+    sizes = [128, 512, 2048]
     size_flags = [f"-DSIZE={s}" for s in sizes]
     # Skip whole-kernel (0); it's the sum of regions 4, 5, 6.
     region_flags = [f"-DTIME_REGION={r}" for r in [0, 4, 5, 6]]
