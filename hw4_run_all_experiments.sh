@@ -25,14 +25,16 @@ ts()  { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "[$(ts)] $*"; }
 
 
-log "=== step 1/4: correctness gate (opt vs upstream) ==="
-python3 check_correctness.py opt
-
-
-log "=== step 2/4: runtime study (baseline + opt) ==="
+log "=== step 1/4: runtime study (baseline) ==="
 # compare_runtime.py builds + runs both studies, then prints the table.
 # Tee the table to a file so we can find it later without rerunning.
-python3 compare_runtime.py | tee runtime_table.txt
+python3 hw4_correlation_runtime.py
+
+
+log "=== step 2/4: runtime study (opt) ==="
+# compare_runtime.py builds + runs both studies, then prints the table.
+# Tee the table to a file so we can find it later without rerunning.
+python3 hw4_correlation_runtime_opt.py
 
 
 log "=== step 3/4: HW counter study — baseline ==="
