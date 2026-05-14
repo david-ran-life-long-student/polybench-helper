@@ -1,28 +1,32 @@
 """
-check_correctness.py — validate correlation.localized.c against upstream correlation.c
+check_correctness.py — validate a candidate correlation source against upstream.
 
-Builds both versions with -DPOLYBENCH_DUMP_ARRAYS, runs them, and compares the
-dumped corr[M][M] matrix with floating-point tolerance.
+Builds both upstream correlation.c and the candidate (default:
+correlation.localized.c) with -DPOLYBENCH_DUMP_ARRAYS, runs both, and compares
+the dumped corr[M][M] matrix with floating-point tolerance.
 
-Run manually before each round of optimization.
+Usage:
+    python3 check_correctness.py                       # localized
+    python3 check_correctness.py phase1                # correlation.phase1.c
+    python3 check_correctness.py phase1 --tol 1e-5     # custom tolerance
+
+Run manually before measuring each phase.
 """
+import argparse
 import os
 import re
 import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.abspath(__file__))
-BUILD_DIR = os.path.join(REPO, "build", "correctness")
 POLY_UTIL = os.path.join(REPO, "polybench-c-4.2.1-beta/utilities")
 POLY_C = os.path.join(POLY_UTIL, "polybench.c")
 KERNEL_DIR = os.path.join(REPO, "polybench-c-4.2.1-beta/datamining/correlation")
 UPSTREAM_SRC = os.path.join(KERNEL_DIR, "correlation.c")
-LOCAL_SRC = os.path.join(KERNEL_DIR, "correlation.localized.c")
 
 # Small enough to be fast, large enough to exercise all four regions meaningfully.
 M = N = 128
 
-TOLERANCE = 1e-6
 COMPILER = "gcc"
 
 
@@ -84,37 +88,51 @@ def diff_arrays(a, b):
 
 
 def main():
-    os.makedirs(BUILD_DIR, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "variant", nargs="?", default="localized",
+        help="suffix of correlation.<variant>.c (default: localized)",
+    )
+    parser.add_argument("--tol", type=float, default=1e-6)
+    args = parser.parse_args()
 
-    upstream_exe = os.path.join(BUILD_DIR, "upstream.exe")
-    local_exe = os.path.join(BUILD_DIR, "localized_r0.exe")
+    candidate_src = os.path.join(KERNEL_DIR, f"correlation.{args.variant}.c")
+    if not os.path.exists(candidate_src):
+        print(f"No such file: {candidate_src}", file=sys.stderr)
+        sys.exit(1)
+
+    build_dir = os.path.join(REPO, "build", f"correctness_{args.variant}")
+    os.makedirs(build_dir, exist_ok=True)
+
+    upstream_exe = os.path.join(build_dir, "upstream.exe")
+    candidate_exe = os.path.join(build_dir, f"{args.variant}_r0.exe")
 
     print(f"Building upstream correlation.c (M=N={M})...")
     build(UPSTREAM_SRC, upstream_exe, [])
 
-    print(f"Building correlation.localized.c with TIME_REGION=0 (M=N={M})...")
-    build(LOCAL_SRC, local_exe, ["-DTIME_REGION=0"])
+    print(f"Building correlation.{args.variant}.c with TIME_REGION=0 (M=N={M})...")
+    build(candidate_src, candidate_exe, ["-DTIME_REGION=0"])
 
     print("Running upstream...")
     upstream_corr = parse_corr_floats(run_and_capture_dump(upstream_exe))
 
-    print("Running localized (TIME_REGION=0)...")
-    local_corr = parse_corr_floats(run_and_capture_dump(local_exe))
+    print(f"Running {args.variant} (TIME_REGION=0)...")
+    candidate_corr = parse_corr_floats(run_and_capture_dump(candidate_exe))
 
-    print(f"Comparing {len(upstream_corr)} elements (tolerance={TOLERANCE})...")
-    result = diff_arrays(upstream_corr, local_corr)
+    print(f"Comparing {len(upstream_corr)} elements (tolerance={args.tol})...")
+    result = diff_arrays(upstream_corr, candidate_corr)
     if isinstance(result, str):
         print(f"FAIL: {result}")
         sys.exit(1)
 
     worst, idx = result
-    if worst > TOLERANCE:
-        print(f"FAIL: max abs diff {worst:.3e} at index {idx} exceeds tolerance {TOLERANCE:.0e}")
+    if worst > args.tol:
+        print(f"FAIL: max abs diff {worst:.3e} at index {idx} exceeds tolerance {args.tol:.0e}")
         i, j = divmod(idx, M)
-        print(f"  corr[{i}][{j}]: upstream={upstream_corr[idx]} localized={local_corr[idx]}")
+        print(f"  corr[{i}][{j}]: upstream={upstream_corr[idx]} candidate={candidate_corr[idx]}")
         sys.exit(1)
 
-    print(f"OK: max abs diff {worst:.3e} within tolerance {TOLERANCE:.0e}")
+    print(f"OK: max abs diff {worst:.3e} within tolerance {args.tol:.0e}")
 
 
 if __name__ == "__main__":
