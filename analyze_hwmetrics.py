@@ -1,7 +1,7 @@
 """
 analyze_hwmetrics.py — side-by-side HW counter metrics: baseline vs opt.
 
-Loads the counter CSVs from build/counters/ and build/counters_opt/, picks a
+Loads the counter CSVs from data/counters-ref.csv and data/counters-opt.csv, picks a
 single region (default R4 — the dominant cost and the most informative for
 comparing vectorization & cache behavior), and prints a table of:
     FLOPs/cycle, AI, vIPC, DP_per_vec, %L1m, %L2m, %L3m, %Stall
@@ -17,7 +17,6 @@ Usage:
     python3 analyze_hwmetrics.py --md
 """
 import argparse
-import glob
 import os
 import re
 
@@ -31,11 +30,10 @@ def _extract_int(value, prefix):
     return int(m.group(1)) if m else None
 
 
-def load_counters(build_dir):
-    matches = sorted(glob.glob(os.path.join(build_dir, "results_*.csv")))
-    if not matches:
-        raise FileNotFoundError(f"no CSV matching {build_dir}/results_*.csv")
-    df = pd.read_csv(matches[-1])
+def load_counters(csv_path):
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"no CSV at {csv_path}")
+    df = pd.read_csv(csv_path)
     df["SizeN"]   = df["Size"].apply(lambda v: _extract_int(v, "SIZE"))
     df["RegionN"] = df["Region"].apply(lambda v: _extract_int(v, "TIME_REGION"))
     return df
@@ -69,8 +67,8 @@ def reduce_metrics(df, opt_level, region):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline",  default="build/counters")
-    ap.add_argument("--opt",       default="build/counters_opt")
+    ap.add_argument("--baseline",  default="data/counters-ref.csv")
+    ap.add_argument("--opt",       default="data/counters-opt.csv")
     ap.add_argument("--opt-level", default="-O3")
     ap.add_argument("--region",    type=int, default=4,
                     help="TIME_REGION value to compare. 4 (corr matrix) is the default.")

@@ -1,0 +1,14 @@
+
+HW counter metrics at -O3, TIME_REGION=4
+  AI               = FLOPs / byte (DRAM-level via L3 misses * 64)
+  FLOPs_per_cycle  = DP FLOPs / cycle  (AVX2 peak = 16)
+  vIPC             = vector DP instructions / cycle
+  DP_per_vec       = effective lanes per vector instruction (AVX2 FMA ideal = 8)
+  %L1m, %L2m, %L3m = miss rates at each cache level
+  %Stall           = resource-stalled cycles
+
+      FLOPs_per_cycle_base FLOPs_per_cycle_opt    AI_base     AI_opt vIPC_base vIPC_opt DP_per_vec_base DP_per_vec_opt %L1m_base %L1m_opt %L2m_base %L2m_opt %L3m_base %L3m_opt %Stall_base %Stall_opt
+SizeN                                                                                                                                                                                                 
+128                  0.409               1.891   2257.778      0.000     0.409    1.418           1.000          1.333    97.293    4.709    40.640   44.106     0.000    0.000      57.950     21.453
+512                  0.174               1.905  17985.410  61629.169     0.174    1.429           1.000          1.333    99.336    5.414   218.693  206.632     0.000    0.001      80.003     22.041
+2048                 0.038               1.749      0.014      1.677     0.038    1.312           1.000          1.333   100.135   28.250   141.261   38.170    78.651   27.582      95.264     29.180

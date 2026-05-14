@@ -1,9 +1,9 @@
 """
 analyze_speedup.py — whole-kernel speedup (baseline / opt) vs problem size.
 
-Loads the runtime CSVs from build/runtime/ and build/runtime_opt/, computes a
-trimmed mean of TIME_REGION=0 (whole kernel) per (size, opt_level), then
-plots speedup as a scatter with one series per opt level.
+Loads the runtime CSVs from data/runtime-ref.csv and data/runtime-opt.csv,
+computes a trimmed mean of TIME_REGION=0 (whole kernel) per (size, opt_level),
+then plots speedup as a scatter with one series per opt level.
 
 Showing all three opt levels intentionally: the -O0 curve isolates pure
 algorithmic/locality wins (no auto-vectorization either side), while -O3
@@ -14,7 +14,6 @@ Usage:
     python3 analyze_speedup.py --output data/speedup.png
 """
 import argparse
-import glob
 import os
 import re
 import sys
@@ -30,11 +29,10 @@ def _extract_int(value, prefix):
     return int(m.group(1)) if m else None
 
 
-def load_runtime(build_dir):
-    matches = sorted(glob.glob(os.path.join(build_dir, "results_*.csv")))
-    if not matches:
-        raise FileNotFoundError(f"no CSV matching {build_dir}/results_*.csv")
-    df = pd.read_csv(matches[-1])
+def load_runtime(csv_path):
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"no CSV at {csv_path}")
+    df = pd.read_csv(csv_path)
     df["SizeN"] = df["Size"].apply(lambda v: _extract_int(v, "SIZE"))
     df["RegionN"] = df["Region"].apply(lambda v: _extract_int(v, "TIME_REGION"))
     return df
@@ -42,8 +40,8 @@ def load_runtime(build_dir):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default="build/runtime")
-    ap.add_argument("--opt",      default="build/runtime_opt")
+    ap.add_argument("--baseline", default="data/runtime-ref.csv")
+    ap.add_argument("--opt",      default="data/runtime-opt.csv")
     ap.add_argument("--output",   default="data/speedup_vs_size.png")
     args = ap.parse_args()
 

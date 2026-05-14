@@ -71,7 +71,7 @@ def main():
     size_flags = [f"-DSIZE={s}" for s in sizes]
     # Skip TIME_REGION=0 here; that's just the sum of 1..4 and runtime
     # study already covers it.
-    region_flags = [f"-DTIME_REGION={r}" for r in range(1, 5)]
+    region_flags = [f"-DTIME_REGION={r}" for r in range(0, 5)]
 
     study = HWCounterStudy(
         build_dir="build/counters",
