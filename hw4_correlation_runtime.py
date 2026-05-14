@@ -30,7 +30,7 @@ def main():
         build_dir="build/runtime",
         experimental_params=[
             Mutable(size_flags, name="Size"),
-            Mutable(["-O0", "-O2", "-O3"], name="Opt_Level"),
+            Mutable(["-O2", "-O3"], name="Opt_Level"),
             Mutable(region_flags, name="Region"),
         ],
         base_compiler_command=base_compile_command,
