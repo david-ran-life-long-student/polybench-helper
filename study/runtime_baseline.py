@@ -1,9 +1,16 @@
 """
-hw4_correlation_runtime.py — Study A: wall-clock runtime per region.
+runtime_baseline.py — Study A: wall-clock runtime per region (baseline kernel).
 
 Sweeps TIME_REGION x Opt_Level x problem size and records POLYBENCH_TIME output.
 The result column is wall-clock seconds spent in the selected region.
+
+Run from the repo root: python3 study/runtime_baseline.py
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "framework"))
+
 import experiment_helper
 from experiment_helper import Study, Mutable
 
@@ -17,7 +24,7 @@ def main():
         "-DPOLYBENCH_USE_RESTRICT",
         "-DPOLYBENCH_TIME",
         "polybench-c-4.2.1-beta/utilities/polybench.c",
-        "polybench-c-4.2.1-beta/datamining/correlation/correlation.localized.c",
+        "kernel/correlation.localized.c",
         "-lm",
     ])
 

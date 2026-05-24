@@ -14,12 +14,16 @@ Comparisons:
     corr matrix:   baseline(R4)            vs  opt(R4)
     whole kernel:  baseline(R0)            vs  opt(R0)
     transpose:     -- new cost --              opt(R5)
+
+Run from the repo root: python3 study/compare_runtime.py
 """
 import argparse
 import glob
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "framework"))
 
 import pandas as pd
 
@@ -62,12 +66,12 @@ def run_both_studies(runs):
 
     baseline = make_study(
         build_dir="build/runtime",
-        source_path="polybench-c-4.2.1-beta/datamining/correlation/correlation.localized.c",
+        source_path="kernel/correlation.localized.c",
         region_values=BASELINE_REGIONS,
     )
     opt = make_study(
         build_dir="build/runtime_opt",
-        source_path="polybench-c-4.2.1-beta/datamining/correlation/correlation.opt.c",
+        source_path="kernel/correlation.opt.c",
         region_values=OPT_REGIONS,
     )
 

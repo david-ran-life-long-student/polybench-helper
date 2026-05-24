@@ -1,4 +1,18 @@
+# vendored PolyBench/C suite — download separately (see README)
 polybench-c-4.2.1-beta
-.idea
+
+# build + experiment artifacts
 build
 __pycache__
+*.pyc
+
+# editor / IDE
+.idea
+.vscode
+
+# LaTeX build leftovers (the committed .pdf stays tracked)
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.synctex.gz

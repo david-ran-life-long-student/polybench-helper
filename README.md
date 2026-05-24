@@ -1,123 +1,88 @@
-# Polybench-Helper
+# Optimizing PolyBench `correlation` — a human-AI engineering collaboration
 
-An automated experiment runner and analysis toolkit designed for evaluating and benchmarking C programs, specifically tailored around the PolyBench/C test suite.
+> I directed an AI coding assistant through a full performance-engineering cycle —
+> profile, diagnose, transform, verify — while I owned the ideation and judgment calls.
+> The result: a **44× speedup** on the PolyBench `correlation` kernel,
+> **bit-identical** to the upstream output, achieved entirely within the
+> function-body constraint.
 
-## PolyBench/C Setup
-Before using this tool, you must have the PolyBench/C test suite downloaded and accessible in your workspace (e.g., `polybench-c-4.2.1-beta/`).
-- **Download & Documentation**: You can download the suite and read the official documentation at the [PolyBench/C Github](https://github.com/MatthiasJReisinger/PolyBenchC-4.2.1).
+![Whole-kernel speedup vs. problem size](results/speedup_vs_size.png)
 
-## Overview
+This repo is a case study in **how I work with AI on hard systems problems**, backed
+by the artifacts that prove the workflow produces real engineering. The AI wrote
+every line of C and Python here; I set the direction, ruled on trade-offs, and
+caught the errors. Neither half would have produced this result alone — and the
+[process writeup](docs/process.md) is honest about exactly which contributions came
+from where.
 
-Polybench-Helper streamlines the process of running extensive compiler and runtime parameter studies. It automatically generates all combinations of your experimental parameters, compiles the required binaries in parallel, executes the benchmarks systematically to avoid systemic biases, and provides analysis utilities for the collected results.
+---
 
-## Features
+## The three things this project demonstrates
 
-- **Parameter Definitions (`Mutable`):** Define parameters across three modes:
-  - `compiler_flag`: Both boolean toggles (e.g., `-fno-vectorize` on/off) and value options (e.g., `-O0`, `-O2`, `-O3`).
-  - `env_var`: Runtime environment variables (e.g., OpenMP thread counts).
-  - `runtime_arg`: Command-line arguments passed to the executable.
-- **Deterministic Builds & Caching (`Study`):**
-  - All configurations are compiled in parallel.
-  - Binaries are named using MD5 fingerprints of the compiler flags to cache and reuse builds across runs.
-- **Hardware Counter Studies (`HWCounterStudy`):**
-  - Subclass of `Study` that integrates with PAPI to collect hardware performance counters.
-  - Define custom derived metrics using `HWCounterMetric`.
-- **Robust Execution:**
-  - Runs experiments in a round-robin "sweep" fashion to mitigate time-dependent systemic biases.
-  - Automatically checkpoints data to CSV files after each full sweep. If interrupted, the suite can resume where it left off.
-- **Data Analysis (`analysis_helper.py`):**
-  - `compute_trimmed_mean`: Removes outliers (highest and lowest) for robust execution time aggregation.
-  - `check_vectorization_impact`: Easily compare the execution time between vectorized and non-vectorized builds.
-  - `print_optimal_configurations`: Displays the best performing setups for different problem sizes.
-  - `plot_3d_performance_surface`: Generates 3D plots mapping variables like Threads and Problem Size to Runtime.
+### 1. Human-AI teaming  →  [`docs/process.md`](docs/process.md)
+A documented account of the collaboration: where my judgment overrode AI proposals
+(rejecting a numerically-unsafe single-pass variance), where my ideas the AI didn't
+have became the foundation (the in-kernel transpose), and where the AI moved faster
+than I could (deriving cache budgets, writing the measurement harness). The honest
+version — including what the AI got wrong and where it doesn't know when to stop.
 
-## Usage
+### 2. Performance engineering  →  [`docs/optimization.md`](docs/optimization.md) · [`kernel/correlation.opt.c`](kernel/correlation.opt.c)
+The kernel was memory-bound and unvectorizable because three of its four loops walk
+columns of a row-major array. Diagnosed with hardware counters, then fixed with three
+transformations, all inside `kernel_correlation`:
+- **In-kernel blocked transpose** — makes every inner loop unit-stride (the foundation).
+- **Column-at-a-time fusion** of the stats + centering passes — halves DRAM traffic.
+- **Register-blocking + backward-`j`** on the hot O(M²N) loop — saturates the AVX2 FMA units.
 
-The project centers around defining a `Study` (or `HWCounterStudy`) in an experiment script.
+Measured at the microarchitecture level: region 4's L3 miss rate drops 79% → 28% and
+FLOPs/cycle rises 0.04 → 1.75 at N=2048. Methodology in [`docs/profiling.md`](docs/profiling.md).
 
-### 1. Define the Base Environment
-Set up your base compiler command (including your target C files and include directories).
+### 3. Software design  →  [`framework/`](framework/)
+A small, declarative, reusable experiment harness ([`experiment_helper.py`](framework/experiment_helper.py))
+that drives the whole study: define a parameter sweep, it compiles every combination in
+parallel (MD5-fingerprinted build cache), runs them round-robin to avoid time-bias,
+checkpoints to CSV, and resumes after interruption. A `HWCounterStudy` subclass adds
+PAPI counters with user-defined derived metrics. Design notes in [`framework/framework.md`](framework/framework.md).
 
-### 2. Define Experimental Parameters
-Use the `Mutable` class to specify the variables you want to test. 
+---
 
-```python
-from experiment_helper import Study, Mutable
+## The result
 
-base_compile_command = "-I polybench-c-4.2.1-beta/utilities polybench-c-4.2.1-beta/utilities/polybench.c target_kernel.c -DPOLYBENCH_TIME"
+Whole-kernel speedup, `-O3`, trimmed mean of 10 runs (M = N):
 
-study = Study(
-    build_dir="build",
-    experimental_params=[
-        Mutable([f"-DN={i}" for i in [512, 1024, 2048]]), # Problem sizes
-        Mutable(["-O0", "-O2", "-O3", "-Ofast"]),         # Optimization levels
-        Mutable(["-fno-vectorize"])                       # Vectorization toggle (True/False automatically implied)
-    ],
-    base_compiler_command=base_compile_command,
-    base_env_vars={},
-    compiler="clang"
-)
+| Size | Baseline | Optimized | Speedup |
+|-----:|---------:|----------:|--------:|
+| 128  | 1.10 ms  | 0.32 ms   | 3.46×   |
+| 512  | 175.8 ms | 16.8 ms   | 10.5×   |
+| 2048 | 46.3 s   | 1.05 s    | **44.1×** |
+
+The speedup grows with N because the baseline's strided access pattern degrades faster
+than the O(M²N) work increases — so the locality fixes pay off proportionally more at scale.
+
+## Repository map
+
+```
+kernel/      The optimized kernel (correlation.opt.c) + instrumented baseline
+docs/        Narrative: process.md, optimization.md, profiling.md + formal report (PDF)
+framework/   The reusable experiment/measurement harness (software-design pillar)
+study/       Drivers + analysis scripts for this specific case study
+results/      Final CSVs and the plots used in the report
 ```
 
-### 3. Build and Run
-First, compile all the required binary permutations, then execute the benchmarks.
+## Reproducing it
 
-```python
-# Compiles all configurations in parallel
-study.ensure_all_builds_exist()
+Requires Python 3 (pandas, numpy, matplotlib), GCC, and — for the counter studies — PAPI.
+The [PolyBench/C 4.2.1](https://github.com/MatthiasJReisinger/PolyBenchC-4.2.1) suite must
+be unpacked at `polybench-c-4.2.1-beta/` (it is not vendored here). All commands run from
+the repo root:
 
-# Runs the benchmarks and saves results to a CSV in the build directory
-study.run_experiments()
+```bash
+python3 study/check_correctness.py opt   # verify opt kernel is bit-identical to upstream
+./study/run_all.sh                        # full runtime + counter sweep -> build/*/results_*.csv
+python3 study/analyze_speedup.py          # regenerate results/speedup_vs_size.png + table
 ```
 
-### 4. Hardware Counter Studies (Optional)
-If you want to measure hardware performance counters using PAPI, use `HWCounterStudy` and define metrics using `HWCounterMetric`. PAPI counters are exposed as parameters to your metric functions.
+## The formal report
 
-```python
-from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
-
-def ipc(PAPI_TOT_INS, PAPI_TOT_CYC):
-    return PAPI_TOT_INS / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
-
-def l1_miss_rate(PAPI_L1_DCM, PAPI_LST_INS):
-    return (PAPI_L1_DCM / PAPI_LST_INS) * 100 if PAPI_LST_INS > 0 else 0
-
-study = HWCounterStudy(
-    build_dir="build",
-    experimental_params=[
-        Mutable(["-O0", "-O3"]),
-    ],
-    base_compiler_command=base_compile_command,
-    base_env_vars={},
-    hw_metrics=[
-        HWCounterMetric("IPC", ipc),
-        HWCounterMetric("%L1m", l1_miss_rate),
-    ],
-    compiler="gcc"
-)
-
-study.ensure_all_builds_exist()
-study.run_experiments()
-```
-
-### 5. Analyze Results
-Use the functions provided in `analysis_helper.py` to parse the resulting CSV files and generate insights or plots. Examples of usage can be found in the provided `hw*_analyze_data_*.py` files.
-
-## Project Structure
-
-- `experiment_helper.py`: Core logic for `Mutable`, `Study` and `HWCounterStudy` classes, handling compilation and execution.
-- `analysis_helper.py`: Functions for data manipulation, outlier removal, and plotting via Pandas and Matplotlib.
-- `hw*_experiment*.py`: Example scripts demonstrating how to define and run a study.
-- `hw*_analyze_data_*.py`: Example scripts demonstrating how to load results and run analyses.
-- `data/`: Directory containing generated plots and output CSVs.
-
-## Requirements
-- Python 3
-- Pandas
-- Numpy
-- Matplotlib
-- A C compiler (e.g., Clang or GCC)
-- PAPI (Performance Application Programming Interface) for hardware counter studies
-
-## Note
-The `hw*` scripts are intended as specific use-case examples of the framework and aren't meant to be reused directly, but they serve as an excellent starting point for learning how to use the `Study` API and `analysis_helper` tools.
+The full academic writeup, including the GenAI-usage discussion from both the AI's and my
+perspective, is in [`docs/CS553_homework_4.pdf`](docs/CS553_homework_4.pdf) (source: `docs/report.tex`).

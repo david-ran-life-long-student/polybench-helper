@@ -8,13 +8,16 @@ Opt stack: R5 transpose, R6 fused stats+center, R4 corr.
 Uses linear y-axis even though R4 dominates at large sizes — that domination
 is itself a finding, and the smaller components remain visible at small N.
 
-Usage:
-    python3 analyze_breakdown.py
-    python3 analyze_breakdown.py --opt-level -O3 --output data/breakdown.png
+Run from the repo root:
+    python3 study/analyze_breakdown.py
+    python3 study/analyze_breakdown.py --opt-level -O3 --output results/breakdown.png
 """
 import argparse
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "framework"))
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,10 +66,10 @@ def pivot_regions(df, opt_level):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline",  default="data/runtime-ref.csv")
-    ap.add_argument("--opt",       default="data/runtime-opt.csv")
+    ap.add_argument("--baseline",  default="results/runtime-ref.csv")
+    ap.add_argument("--opt",       default="results/runtime-opt.csv")
     ap.add_argument("--opt-level", default="-O3")
-    ap.add_argument("--output",    default="data/breakdown.png")
+    ap.add_argument("--output",    default="results/breakdown.png")
     args = ap.parse_args()
 
     base_pivot = pivot_regions(load_runtime(args.baseline), args.opt_level)

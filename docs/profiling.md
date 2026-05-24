@@ -96,7 +96,7 @@ The localized file is also the correctness oracle. Build it with `-DTIME_REGION=
 
 We will run two parameter sweeps. Both use the existing `experiment_helper.py` framework (round-robin sweep, parallel builds, CSV checkpointing).
 
-### Study A — Runtime (`hw4_correlation_runtime.py`)
+### Study A — Runtime (`study/runtime_baseline.py`)
 
 `Study` (not `HWCounterStudy`). Measures wall-clock time per region.
 
@@ -110,7 +110,7 @@ This study answers:
 - How does each region scale with problem size?
 - What does `-O3` already do for us?
 
-### Study B — Hardware counters (`hw4_correlation_counters.py`)
+### Study B — Hardware counters (`study/counters_baseline.py`)
 
 `HWCounterStudy`. Same parameter sweep, focused on `TIME_REGION ∈ {1, 2, 3, 4}` initially (whole-kernel `TIME_REGION=0` is informative but is just the sum of the regions).
 

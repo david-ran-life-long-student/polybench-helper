@@ -1,8 +1,8 @@
 """
 analyze_hwmetrics.py — side-by-side HW counter metrics: baseline vs opt.
 
-Loads the counter CSVs from data/counters-ref.csv and data/counters-opt.csv, picks a
-single region (default R4 — the dominant cost and the most informative for
+Loads the counter CSVs from results/counters-ref.csv and results/counters-opt.csv,
+picks a single region (default R4 — the dominant cost and the most informative for
 comparing vectorization & cache behavior), and prints a table of:
     FLOPs/cycle, AI, vIPC, DP_per_vec, %L1m, %L2m, %L3m, %Stall
 per (size, baseline | opt) at the chosen opt level.
@@ -11,14 +11,17 @@ Defaults to -O3 because vectorization metrics (vIPC, DP_per_vec) are only
 meaningful when the compiler actually emitted vector instructions; at -O0
 nothing vectorizes so the comparison degenerates.
 
-Usage:
-    python3 analyze_hwmetrics.py
-    python3 analyze_hwmetrics.py --region 6     # fused stats+center on opt side
-    python3 analyze_hwmetrics.py --md
+Run from the repo root:
+    python3 study/analyze_hwmetrics.py
+    python3 study/analyze_hwmetrics.py --region 6     # fused stats+center on opt side
+    python3 study/analyze_hwmetrics.py --md
 """
 import argparse
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "framework"))
 
 import pandas as pd
 
@@ -67,8 +70,8 @@ def reduce_metrics(df, opt_level, region):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline",  default="data/counters-ref.csv")
-    ap.add_argument("--opt",       default="data/counters-opt.csv")
+    ap.add_argument("--baseline",  default="results/counters-ref.csv")
+    ap.add_argument("--opt",       default="results/counters-opt.csv")
     ap.add_argument("--opt-level", default="-O3")
     ap.add_argument("--region",    type=int, default=4,
                     help="TIME_REGION value to compare. 4 (corr matrix) is the default.")

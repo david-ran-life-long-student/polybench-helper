@@ -18,11 +18,12 @@ import re
 import subprocess
 import sys
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # study/ -> repo root
 POLY_UTIL = os.path.join(REPO, "polybench-c-4.2.1-beta/utilities")
 POLY_C = os.path.join(POLY_UTIL, "polybench.c")
-KERNEL_DIR = os.path.join(REPO, "polybench-c-4.2.1-beta/datamining/correlation")
+KERNEL_DIR = os.path.join(REPO, "polybench-c-4.2.1-beta/datamining/correlation")  # headers + upstream
 UPSTREAM_SRC = os.path.join(KERNEL_DIR, "correlation.c")
+CANDIDATE_DIR = os.path.join(REPO, "kernel")  # our localized / opt variants live here
 
 # Small enough to be fast, large enough to exercise all four regions meaningfully.
 M = N = 128
@@ -96,7 +97,7 @@ def main():
     parser.add_argument("--tol", type=float, default=1e-6)
     args = parser.parse_args()
 
-    candidate_src = os.path.join(KERNEL_DIR, f"correlation.{args.variant}.c")
+    candidate_src = os.path.join(CANDIDATE_DIR, f"correlation.{args.variant}.c")
     if not os.path.exists(candidate_src):
         print(f"No such file: {candidate_src}", file=sys.stderr)
         sys.exit(1)

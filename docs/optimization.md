@@ -113,8 +113,10 @@ The register-block + backward-j step adds another ~3× on top of the transpose, 
 
 ## Verification protocol
 
-1. **Correctness gate**: `python3 check_correctness.py opt`. Must pass at 1e-6 tolerance. Currently bit-identical (max diff 0.000e+00).
-2. **Runtime study + table**: `python3 compare_runtime.py`. Builds and runs both baseline (`correlation.localized.c`) and opt (`correlation.opt.c`) studies via `experiment_helper`, then prints the speedup table.
-3. **HW counter study**: `python3 hw4_correlation_counters.py` (baseline) and `python3 hw4_correlation_counters_opt.py` (opt). Compare metrics like `FLOPs_per_cycle`, `AI`, `%L3m` between the two CSVs.
+All commands run from the repo root.
+
+1. **Correctness gate**: `python3 study/check_correctness.py opt`. Must pass at 1e-6 tolerance. Currently bit-identical (max diff 0.000e+00).
+2. **Runtime study + table**: `python3 study/compare_runtime.py`. Builds and runs both baseline (`kernel/correlation.localized.c`) and opt (`kernel/correlation.opt.c`) studies via `experiment_helper`, then prints the speedup table.
+3. **HW counter study**: `python3 study/counters_baseline.py` and `python3 study/counters_opt.py`. Compare metrics like `FLOPs_per_cycle`, `AI`, `%L3m` between the two CSVs.
 
 CSV outputs live in `build/runtime/`, `build/runtime_opt/`, `build/counters/`, `build/counters_opt/` — preserved across reruns thanks to the framework's caching of completed (config, run-iteration) pairs.

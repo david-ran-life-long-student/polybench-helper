@@ -1,22 +1,23 @@
 """
 analyze_speedup.py — whole-kernel speedup (baseline / opt) vs problem size.
 
-Loads the runtime CSVs from data/runtime-ref.csv and data/runtime-opt.csv,
+Loads the runtime CSVs from results/runtime-ref.csv and results/runtime-opt.csv,
 computes a trimmed mean of TIME_REGION=0 (whole kernel) per (size, opt_level),
 then plots speedup as a scatter with one series per opt level.
 
-Showing all three opt levels intentionally: the -O0 curve isolates pure
-algorithmic/locality wins (no auto-vectorization either side), while -O3
-includes the FMA throughput from explicit register-blocking.
+Showing both opt levels intentionally: -O2 isolates the locality wins from the
+transpose and fusion, while -O3 adds the FMA throughput from register-blocking.
 
-Usage:
-    python3 analyze_speedup.py
-    python3 analyze_speedup.py --output data/speedup.png
+Run from the repo root:
+    python3 study/analyze_speedup.py
+    python3 study/analyze_speedup.py --output results/speedup.png
 """
 import argparse
 import os
 import re
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "framework"))
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -40,9 +41,9 @@ def load_runtime(csv_path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default="data/runtime-ref.csv")
-    ap.add_argument("--opt",      default="data/runtime-opt.csv")
-    ap.add_argument("--output",   default="data/speedup_vs_size.png")
+    ap.add_argument("--baseline", default="results/runtime-ref.csv")
+    ap.add_argument("--opt",      default="results/runtime-opt.csv")
+    ap.add_argument("--output",   default="results/speedup_vs_size.png")
     args = ap.parse_args()
 
     base = load_runtime(args.baseline)

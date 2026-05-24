@@ -48,7 +48,7 @@ The AI acted as a fast, broad **implementation and explanation partner**. Specif
 
 ### Drafting and writing
 - Authored the C source for `correlation.localized.c` and `correlation.opt.c`, including the `#ifdef TIME_REGION` instrumentation harness, the blocked transpose, the column-fusion loop, and the register-blocked region 4.
-- Wrote all Python infrastructure: `check_correctness.py`, `compare_runtime.py`, the three analysis scripts (`analyze_speedup.py`, `analyze_breakdown.py`, `analyze_hwmetrics.py`), and `run_experiments.sh`.
+- Wrote all Python infrastructure: `check_correctness.py`, `compare_runtime.py`, the three analysis scripts (`analyze_speedup.py`, `analyze_breakdown.py`, `analyze_hwmetrics.py`), and `run_all.sh`.
 - Wrote the project documentation (`profiling.md`, `optimization.md`, this `process.md`) at the user's request, condensing the conversation into reference material.
 
 ### Surfacing options for user judgment
