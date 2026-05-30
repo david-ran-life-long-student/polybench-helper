@@ -1,6 +1,6 @@
 # Polybench-Helper
 
-An automated experiment runner and analysis toolkit designed for evaluating and benchmarking C programs, specifically tailored around the PolyBench/C test suite.
+An declarative automated experiment runner and analysis toolkit designed for evaluating and benchmarking C programs, specifically tailored around the PolyBench/C test suite.
 
 ## PolyBench/C Setup
 Before using this tool, you must have the PolyBench/C test suite downloaded and accessible in your workspace (e.g., `polybench-c-4.2.1-beta/`).
@@ -36,7 +36,7 @@ The project centers around defining a `Study` in an experiment script.
 Set up your base compiler command (including your target C files and include directories).
 
 ### 2. Define Experimental Parameters
-Use the `Mutable` class to specify the variables you want to test. 
+Use the `Mutable` class to specify the variables you want to test.
 
 ```python
 from experiment_helper import Study, Mutable
@@ -56,6 +56,38 @@ study = Study(
 )
 ```
 
+For hardware counter studies using PAPI, supply a set of HWCounterMetric instances wrapping functions with the PAPI event as arguments  
+
+```python
+from experiment_helper import HWCounterStudy, HWCounterMetric, Mutable
+
+def flops_per_cycle(PAPI_DP_OPS, PAPI_TOT_CYC):
+    """DP FLOPs per cycle. AVX2 architectural peak = 16."""
+    return PAPI_DP_OPS / PAPI_TOT_CYC if PAPI_TOT_CYC > 0 else 0
+
+
+def arithmetic_intensity(PAPI_DP_OPS, PAPI_L3_TCM):
+    """DRAM-level AI: FLOPs per byte (L3 miss x 64B line)."""
+    return PAPI_DP_OPS / (PAPI_L3_TCM * 64) if PAPI_L3_TCM > 0 else 0
+
+study = Study(
+    build_dir="build",
+    experimental_params=[
+        Mutable([f"-DN={i}" for i in [512, 1024, 2048]]), # Problem sizes
+        Mutable(["-O0", "-O2", "-O3", "-Ofast"]),         # Optimization levels
+        Mutable(["-fno-vectorize"])                       # Vectorization toggle (True/False automatically implied)
+    ],
+    base_compiler_command=base_compile_command,
+    base_env_vars={},
+    hw_metrics=[
+      HWCounterMetric("FLOPs_per_cycle", flops_per_cycle),
+      HWCounterMetric("AI", arithmetic_intensity)
+    ],
+    compiler="clang"
+)
+
+```
+
 ### 3. Build and Run
 First, compile all the required binary permutations, then execute the benchmarks.
 
@@ -68,15 +100,7 @@ study.run_experiments()
 ```
 
 ### 4. Analyze Results
-Use the functions provided in `analysis_helper.py` to parse the resulting CSV files and generate insights or plots. Examples of usage can be found in the provided `hw*_analyze_data_*.py` files.
-
-## Project Structure
-
-- `experiment_helper.py`: Core logic for `Mutable` and `Study` classes, handling compilation and execution.
-- `analysis_helper.py`: Functions for data manipulation, outlier removal, and plotting via Pandas and Matplotlib.
-- `hw*_experiment.py`: Example scripts demonstrating how to define and run a study.
-- `hw*_analyze_data_*.py`: Example scripts demonstrating how to load results and run analyses.
-- `data/`: Directory containing generated plots and output CSVs.
+Use the functions provided in `analysis_helper.py` to parse the resulting CSV files and generate insights or plots.
 
 ## Requirements
 - Python 3
@@ -84,6 +108,3 @@ Use the functions provided in `analysis_helper.py` to parse the resulting CSV fi
 - Numpy
 - Matplotlib
 - A C compiler (e.g., Clang or GCC)
-
-## Note
-The `hw*` scripts are intended as specific use-case examples of the framework and aren't meant to be reused directly, but they serve as an excellent starting point for learning how to use the `Study` API and `analysis_helper` tools.
